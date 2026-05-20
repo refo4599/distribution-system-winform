@@ -1,9 +1,0 @@
-﻿namespace DistributionSystem.Business.Dtos
-{
-    public class WarehouseBalanceDto
-    {
-        public int ProductId { get; set; }
-        public string ProductName { get; set; } = string.Empty;
-        public int Balance { get; set; }
-    }
-}

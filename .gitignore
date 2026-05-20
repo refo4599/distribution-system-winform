@@ -4,3 +4,5 @@ packages/
 .vs/
 *.user
 *.suo
+*.exe
+*.dll

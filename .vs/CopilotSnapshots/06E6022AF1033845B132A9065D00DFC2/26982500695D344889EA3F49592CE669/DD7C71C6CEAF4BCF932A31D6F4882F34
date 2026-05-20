@@ -1,8 +1,0 @@
-﻿namespace DistributionSystem.Data
-{
-    // Placeholder removed. Concrete data-access classes are implemented in separate files: SqlConnectionFactory and BaseRepository.
-    internal static class Placeholder
-    {
-        // Intentionally left blank.
-    }
-}
