@@ -1,0 +1,13 @@
+﻿using System.Windows.Forms;
+using System.Drawing;
+
+namespace DistributionSystem.UI.Forms
+{
+    public partial class SalesInvoicesForm : Form
+    {
+        public SalesInvoicesForm()
+        {
+            InitializeComponent();
+        }
+    }
+}

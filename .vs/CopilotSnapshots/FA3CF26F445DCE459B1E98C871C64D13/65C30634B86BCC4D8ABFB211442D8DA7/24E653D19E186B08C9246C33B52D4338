@@ -1,0 +1,8 @@
+﻿// Backwards-compat alias for existing interfaces if needed
+using DistributionSystem.Data.Interfaces;
+namespace DistributionSystem.Data.Interfaces
+{
+    public interface IWarehouseRepository : IWarehouseTransactionRepository
+    {
+    }
+}

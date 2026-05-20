@@ -1,0 +1,88 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "E:\\My Project\\DistributionSystem.UI\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{7FE032AC-E82D-4F20-B019-8A4E352BBFCC}|DistributionSystem.Business\\DistributionSystem.Business.csproj|e:\\my project\\distributionsystem.ui\\distributionsystem.business\\services\\customerdetailsreportservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7FE032AC-E82D-4F20-B019-8A4E352BBFCC}|DistributionSystem.Business\\DistributionSystem.Business.csproj|solutionrelative:distributionsystem.business\\services\\customerdetailsreportservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{853F7A1F-15ED-4785-82BD-B668D1DBD88B}|DistributionSystem.UI\\DistributionSystem.UI.csproj|e:\\my project\\distributionsystem.ui\\distributionsystem.ui\\forms\\dashboardform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{853F7A1F-15ED-4785-82BD-B668D1DBD88B}|DistributionSystem.UI\\DistributionSystem.UI.csproj|solutionrelative:distributionsystem.ui\\forms\\dashboardform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{853F7A1F-15ED-4785-82BD-B668D1DBD88B}|DistributionSystem.UI\\DistributionSystem.UI.csproj|e:\\my project\\distributionsystem.ui\\distributionsystem.ui\\forms\\animationhelper.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{853F7A1F-15ED-4785-82BD-B668D1DBD88B}|DistributionSystem.UI\\DistributionSystem.UI.csproj|solutionrelative:distributionsystem.ui\\forms\\animationhelper.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{853F7A1F-15ED-4785-82BD-B668D1DBD88B}|DistributionSystem.UI\\DistributionSystem.UI.csproj|e:\\my project\\distributionsystem.ui\\distributionsystem.ui\\forms\\transactionsform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{853F7A1F-15ED-4785-82BD-B668D1DBD88B}|DistributionSystem.UI\\DistributionSystem.UI.csproj|solutionrelative:distributionsystem.ui\\forms\\transactionsform.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "CustomerDetailsReportService.cs",
+              "DocumentMoniker": "E:\\My Project\\DistributionSystem.UI\\DistributionSystem.Business\\Services\\CustomerDetailsReportService.cs",
+              "RelativeDocumentMoniker": "DistributionSystem.Business\\Services\\CustomerDetailsReportService.cs",
+              "ToolTip": "E:\\My Project\\DistributionSystem.UI\\DistributionSystem.Business\\Services\\CustomerDetailsReportService.cs",
+              "RelativeToolTip": "DistributionSystem.Business\\Services\\CustomerDetailsReportService.cs",
+              "ViewState": "AgIAABACAAAAAAAAAAAowCQCAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-05-20T11:38:51.983Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "AnimationHelper.cs",
+              "DocumentMoniker": "E:\\My Project\\DistributionSystem.UI\\DistributionSystem.UI\\Forms\\AnimationHelper.cs",
+              "RelativeDocumentMoniker": "DistributionSystem.UI\\Forms\\AnimationHelper.cs",
+              "ToolTip": "E:\\My Project\\DistributionSystem.UI\\DistributionSystem.UI\\Forms\\AnimationHelper.cs",
+              "RelativeToolTip": "DistributionSystem.UI\\Forms\\AnimationHelper.cs",
+              "ViewState": "AgIAAAUAAAAAAAAAAAAswBAAAAAWAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-05-20T11:35:50.264Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "TransactionsForm.cs",
+              "DocumentMoniker": "E:\\My Project\\DistributionSystem.UI\\DistributionSystem.UI\\Forms\\TransactionsForm.cs",
+              "RelativeDocumentMoniker": "DistributionSystem.UI\\Forms\\TransactionsForm.cs",
+              "ToolTip": "E:\\My Project\\DistributionSystem.UI\\DistributionSystem.UI\\Forms\\TransactionsForm.cs",
+              "RelativeToolTip": "DistributionSystem.UI\\Forms\\TransactionsForm.cs",
+              "ViewState": "AgIAACMDAAAAAAAAAAAmwDcDAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-05-20T11:28:24.328Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "DashboardForm.cs",
+              "DocumentMoniker": "E:\\My Project\\DistributionSystem.UI\\DistributionSystem.UI\\Forms\\DashboardForm.cs",
+              "RelativeDocumentMoniker": "DistributionSystem.UI\\Forms\\DashboardForm.cs",
+              "ToolTip": "E:\\My Project\\DistributionSystem.UI\\DistributionSystem.UI\\Forms\\DashboardForm.cs",
+              "RelativeToolTip": "DistributionSystem.UI\\Forms\\DashboardForm.cs",
+              "ViewState": "AgIAALIAAAAAAAAAAAAmwMYAAAAOAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-05-20T11:28:15.735Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

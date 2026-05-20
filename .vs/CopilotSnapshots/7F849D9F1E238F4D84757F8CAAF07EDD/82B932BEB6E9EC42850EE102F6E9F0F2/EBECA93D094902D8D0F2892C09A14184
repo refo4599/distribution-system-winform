@@ -1,0 +1,36 @@
+﻿using System;
+
+namespace DistributionSystem.Business.Services
+{
+    public abstract class BaseService
+    {
+        // Common service-level utilities, exception handling helpers, and logging hooks could be added here.
+
+        protected void Execute(Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                // Basic error handling: rethrow after optional logging.
+                // In production, inject a logger and log the exception here.
+                throw new InvalidOperationException("An error occurred while executing service operation.", ex);
+            }
+        }
+
+        protected T Execute<T>(Func<T> func)
+        {
+            try
+            {
+                return func();
+            }
+            catch (Exception ex)
+            {
+                // Wrap exception to provide service-level context.
+                throw new InvalidOperationException("An error occurred while executing service operation.", ex);
+            }
+        }
+    }
+}

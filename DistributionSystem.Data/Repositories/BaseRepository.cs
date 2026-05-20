@@ -1,0 +1,17 @@
+using System.Data.SqlClient;
+using DistributionSystem.Data.Data;
+
+namespace DistributionSystem.Data.Repositories
+{
+    public abstract class BaseRepository
+    {
+        private readonly SqlConnectionFactory _connectionFactory;
+
+        protected BaseRepository(SqlConnectionFactory connectionFactory)
+        {
+            _connectionFactory = connectionFactory;
+        }
+
+        protected SqlConnection Connection => _connectionFactory.CreateConnection();
+    }
+}

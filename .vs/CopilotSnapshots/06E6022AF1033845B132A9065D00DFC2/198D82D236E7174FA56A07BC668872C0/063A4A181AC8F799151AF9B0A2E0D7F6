@@ -1,0 +1,71 @@
+﻿using DistributionSystem.UI.Controls;
+using System.Drawing;
+
+namespace DistributionSystem.UI.Forms
+{
+    partial class DashboardForm
+    {
+        private DashboardCard cardProducts;
+        private DashboardCard cardCustomers;
+        private DashboardCard cardSuppliers;
+        private DashboardCard cardSales;
+        private DashboardCard cardPurchases;
+        private DashboardCard cardLowStock;
+
+        private void InitializeComponent()
+        {
+            this.tableLayoutPanel = new System.Windows.Forms.TableLayoutPanel();
+            this.cardProducts = new DashboardCard();
+            this.cardCustomers = new DashboardCard();
+            this.cardSuppliers = new DashboardCard();
+            this.cardSales = new DashboardCard();
+            this.cardPurchases = new DashboardCard();
+            this.cardLowStock = new DashboardCard();
+
+            this.SuspendLayout();
+
+            this.tableLayoutPanel.ColumnCount = 3;
+            this.tableLayoutPanel.RowCount = 2;
+            this.tableLayoutPanel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.tableLayoutPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33.33F));
+            this.tableLayoutPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33.33F));
+            this.tableLayoutPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33.33F));
+            this.tableLayoutPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            this.tableLayoutPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            this.tableLayoutPanel.Padding = new System.Windows.Forms.Padding(20);
+            this.tableLayoutPanel.BackColor = ColorTranslator.FromHtml("#F3F4F6");
+
+            // configure cards
+            ConfigureCard(cardProducts, "المنتجات", "0", "إجمالي المنتجات", ColorTranslator.FromHtml("#3B82F6"), "Products");
+            ConfigureCard(cardCustomers, "العملاء", "0", "إجمالي العملاء", ColorTranslator.FromHtml("#10B981"), "Customers");
+            ConfigureCard(cardSuppliers, "الموردون", "0", "إجمالي الموردين", ColorTranslator.FromHtml("#F59E0B"), "Suppliers");
+            ConfigureCard(cardSales, "المبيعات", "0", "إجمالي المبيعات", ColorTranslator.FromHtml("#8B5CF6"), "Sales");
+            ConfigureCard(cardPurchases, "المشتريات", "0", "إجمالي المشتريات", ColorTranslator.FromHtml("#14B8A6"), "Purchases");
+            ConfigureCard(cardLowStock, "تنبيهات المخزون", "0", "المنتجات منخفضة المخزون", ColorTranslator.FromHtml("#EF4444"), "Warehouse");
+
+            // place cards
+            this.tableLayoutPanel.Controls.Add(this.cardProducts, 0, 0);
+            this.tableLayoutPanel.Controls.Add(this.cardCustomers, 1, 0);
+            this.tableLayoutPanel.Controls.Add(this.cardSuppliers, 2, 0);
+            this.tableLayoutPanel.Controls.Add(this.cardSales, 0, 1);
+            this.tableLayoutPanel.Controls.Add(this.cardPurchases, 1, 1);
+            this.tableLayoutPanel.Controls.Add(this.cardLowStock, 2, 1);
+
+            this.Controls.Add(this.tableLayoutPanel);
+            this.PerformLayout();
+        }
+
+        private void ConfigureCard(DashboardCard card, string title, string value, string subtitle, Color color, string tag)
+        {
+            card.CardTitle = title;
+            card.CardValue = value;
+            card.CardSubtitle = subtitle;
+            card.CardColor = color;
+            card.IconText = "■"; // placeholder; recommend using FontAwesome in production
+            card.Tag = tag;
+            card.Dock = System.Windows.Forms.DockStyle.Fill;
+            card.Margin = new System.Windows.Forms.Padding(15);
+            card.Click += Card_Click;
+        }
+    }
+}

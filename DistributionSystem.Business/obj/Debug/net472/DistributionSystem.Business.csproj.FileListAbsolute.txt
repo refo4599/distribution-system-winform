@@ -1,0 +1,28 @@
+D:\DistributionSystem.UI\DistributionSystem.Business\bin\Debug\net472\DistributionSystem.Business.dll
+D:\DistributionSystem.UI\DistributionSystem.Business\bin\Debug\net472\DistributionSystem.Business.pdb
+D:\DistributionSystem.UI\DistributionSystem.Business\bin\Debug\net472\BouncyCastle.Crypto.dll
+D:\DistributionSystem.UI\DistributionSystem.Business\bin\Debug\net472\itextsharp.dll
+D:\DistributionSystem.UI\DistributionSystem.Business\bin\Debug\net472\DistributionSystem.Data.dll
+D:\DistributionSystem.UI\DistributionSystem.Business\bin\Debug\net472\DistributionSystem.Data.pdb
+D:\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.csproj.AssemblyReference.cache
+D:\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.GeneratedMSBuildEditorConfig.editorconfig
+D:\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.AssemblyInfoInputs.cache
+D:\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.AssemblyInfo.cs
+D:\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.csproj.CoreCompileInputs.cache
+D:\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\Distribu.E1A4D2B6.Up2Date
+D:\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.dll
+D:\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.pdb
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\bin\Debug\net472\DistributionSystem.Business.dll
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\bin\Debug\net472\DistributionSystem.Business.pdb
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\bin\Debug\net472\BouncyCastle.Crypto.dll
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\bin\Debug\net472\itextsharp.dll
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\bin\Debug\net472\DistributionSystem.Data.dll
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\bin\Debug\net472\DistributionSystem.Data.pdb
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.csproj.AssemblyReference.cache
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.GeneratedMSBuildEditorConfig.editorconfig
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.AssemblyInfoInputs.cache
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.AssemblyInfo.cs
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.csproj.CoreCompileInputs.cache
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\Distribu.E1A4D2B6.Up2Date
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.dll
+E:\My Project\DistributionSystem.UI\DistributionSystem.Business\obj\Debug\net472\DistributionSystem.Business.pdb

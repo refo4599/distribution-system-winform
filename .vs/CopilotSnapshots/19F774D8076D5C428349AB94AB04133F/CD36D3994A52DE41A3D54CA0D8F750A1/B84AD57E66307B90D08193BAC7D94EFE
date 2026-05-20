@@ -1,0 +1,324 @@
+﻿using System;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using DistributionSystem.Business.Services;
+using Guna.UI2.WinForms;
+
+namespace DistributionSystem.UI.Forms
+{
+    public partial class MainLayoutForm : Form
+    {
+        private Panel headerPanel;
+        private Panel sidePanel;
+        private Panel panelContent;
+        private Label lblTitle;
+        private Label lblUser;
+        private Label lblDateTime;
+        private Guna2Button btnDashboard;
+        private Guna2Button btnTreasury;
+        private Guna2Button btnWarehouse;
+        private Guna2Button btnCustomers;
+        private Guna2Button btnProducts;
+        private Guna2Button btnInbound;
+        private Guna2Button btnVehicles;
+        private Guna2Button btnSalesInvoices;
+        private Guna2Button btnEmployees;
+        private Guna2Button btnTransactions;
+        private Guna2Button btnBackup;
+        private Guna2Button btnLogout;
+
+        private Timer _clockTimer;
+        public string LoggedInUser { get; set; } = "admin";
+
+        public MainLayoutForm()
+        {
+            InitializeComponent();
+            InitializeRuntime();
+        }
+
+        private void InitializeComponent()
+        {
+            this.Text = "بصوص";
+            this.ClientSize = new Size(1024, 768);
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.Padding = new Padding(0);
+            this.Font = new Font("Cairo", 10F);
+            this.BackColor = ColorTranslator.FromHtml("#F0F2F5");
+            this.RightToLeft = RightToLeft.Yes;
+            this.RightToLeftLayout = true;
+
+            headerPanel = new Panel { Height = 72, Dock = DockStyle.Top, BackColor = Color.Transparent };
+            headerPanel.Paint += HeaderPanel_Paint;
+            headerPanel.Resize += (s, e) => { headerPanel.Invalidate(); PositionHeaderInfo(); };
+
+            lblUser = new Label
+            {
+                AutoSize = false,
+                Size = new Size(300, 24),
+                Font = new Font("Cairo", 10F, FontStyle.Regular),
+                ForeColor = Color.White,
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.BottomLeft
+            };
+            lblDateTime = new Label
+            {
+                AutoSize = false,
+                Size = new Size(300, 20),
+                Font = new Font("Cairo", 9F, FontStyle.Regular),
+                ForeColor = Color.White,
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.TopLeft
+            };
+
+            sidePanel = new Panel { Width = 180, Dock = DockStyle.Left, BackColor = ColorTranslator.FromHtml("#1A2035") };
+            panelContent = new Panel { Dock = DockStyle.Fill, BackColor = ColorTranslator.FromHtml("#F3F4F6") };
+
+            // ══════════════════════════════════════════════════
+            //  الترتيب الجديد — كل زر بـ top محسوب
+            // ══════════════════════════════════════════════════
+            int y = 10, gap = 50;
+            btnDashboard = MakeSidebarButton("اللوحة", y); y += gap;
+            btnTreasury = MakeSidebarButton("الخزنة", y); y += gap;
+            btnWarehouse = MakeSidebarButton("المخزن", y); y += gap;
+            btnCustomers = MakeSidebarButton("العملاء", y); y += gap;
+            btnProducts = MakeSidebarButton("المنتجات", y); y += gap;
+            btnInbound = MakeSidebarButton("الوارد", y); y += gap;
+            btnVehicles = MakeSidebarButton("التوزيع", y); y += gap;
+            btnSalesInvoices = MakeSidebarButton("فواتير البيع", y); y += gap;
+            btnEmployees = MakeSidebarButton("مصروفات إدارية", y); y += gap;
+            btnTransactions = MakeSidebarButton("السجل", y); y += gap;
+            btnBackup = MakeSidebarButton("نسخ احتياطي", y); y += gap;
+            btnLogout = MakeSidebarButton("تسجيل الخروج", y);
+
+            // ألوان مميزة
+            btnBackup.FillColor = ColorTranslator.FromHtml("#065F46");
+            btnBackup.HoverState.FillColor = ColorTranslator.FromHtml("#047857");
+
+            btnLogout.FillColor = Color.FromArgb(180, 30, 20);
+            btnLogout.HoverState.FillColor = Color.FromArgb(200, 50, 30);
+
+            // أحداث
+            btnDashboard.Click += (s, e) => btnDashboard_Click(s, e);
+            btnTreasury.Click += (s, e) => btnTreasury_Click(s, e);
+            btnWarehouse.Click += (s, e) => btnWarehouse_Click(s, e);
+            btnCustomers.Click += (s, e) => btnCustomers_Click(s, e);
+            btnProducts.Click += (s, e) => btnProducts_Click(s, e);
+            btnInbound.Click += (s, e) => btnInbound_Click(s, e);
+            btnVehicles.Click += (s, e) => btnVehicles_Click(s, e);
+            btnSalesInvoices.Click += (s, e) => btnSalesInvoices_Click(s, e);
+            btnEmployees.Click += (s, e) => btnEmployees_Click(s, e);
+            btnTransactions.Click += (s, e) => btnTransactions_Click(s, e);
+            btnBackup.Click += (s, e) => btnBackup_Click(s, e);
+            btnLogout.Click += (s, e) => btnLogout_Click(s, e);
+
+            sidePanel.Controls.AddRange(new Control[]
+            {
+                btnDashboard, btnTreasury, btnWarehouse, btnCustomers,
+                btnProducts, btnInbound, btnVehicles, btnSalesInvoices,
+                btnEmployees, btnTransactions, btnBackup, btnLogout
+            });
+
+            this.Controls.Add(panelContent);
+            this.Controls.Add(sidePanel);
+            this.Controls.Add(headerPanel);
+
+            this.Load += (s, e) => { PositionHeaderInfo(); SetActiveButton(btnDashboard); };
+        }
+
+        private Guna2Button MakeSidebarButton(string text, int top)
+        {
+            var btn = new Guna2Button
+            {
+                Text = text,
+                Size = new Size(sidePanel.Width - 20, 44),
+                Location = new Point(10, top),
+                FillColor = ColorTranslator.FromHtml("#111827"),
+                ForeColor = Color.White,
+                BorderRadius = 10,
+                Font = new Font("Cairo", 11F, FontStyle.Bold),
+                ShadowDecoration = { Enabled = false },
+                Cursor = Cursors.Hand,
+                TextAlign = HorizontalAlignment.Center
+            };
+            btn.HoverState.FillColor = ColorTranslator.FromHtml("#252D45");
+            return btn;
+        }
+
+        private void PositionHeaderInfo()
+        {
+            try { lblUser.Location = new Point(20, 18); lblDateTime.Location = new Point(20, 40); }
+            catch { }
+        }
+
+        private void HeaderPanel_Paint(object sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var rc = new Rectangle(0, 0, headerPanel.Width, headerPanel.Height);
+            using (var br = new LinearGradientBrush(rc,
+                ColorTranslator.FromHtml("#1a2f5e"),
+                ColorTranslator.FromHtml("#1565c0"),
+                LinearGradientMode.Horizontal))
+                g.FillRectangle(br, rc);
+            using (var dot = new SolidBrush(Color.FromArgb(18, 255, 255, 255)))
+                for (int x = 10; x < headerPanel.Width; x += 22)
+                    for (int y = 8; y < headerPanel.Height; y += 22)
+                        g.FillEllipse(dot, x, y, 2, 2);
+            string title = "بصوص";
+            using (var f = new Font("Cairo", 20F, FontStyle.Bold))
+            using (var brush = new SolidBrush(Color.White))
+            {
+                var sz = g.MeasureString(title, f);
+                g.DrawString(title, f, brush,
+                    (headerPanel.Width - sz.Width) / 2f,
+                    (headerPanel.Height - sz.Height) / 2f - 4);
+            }
+        }
+
+        private GraphicsPath RoundPath(Rectangle r, int radius)
+        {
+            var path = new GraphicsPath();
+            if (radius <= 0) { path.AddRectangle(r); return path; }
+            int d = radius * 2;
+            path.AddArc(r.Left, r.Top, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Top, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.Left, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        private void InitializeRuntime()
+        {
+            lblUser.Text = $"المستخدم: {LoggedInUser}";
+            _clockTimer = new Timer { Interval = 1000 };
+            _clockTimer.Tick += (s, e) => lblDateTime.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            _clockTimer.Start();
+            Task.Run(() => new BackupService().AutoDailyBackup());
+            LoadChildForm(new DashboardForm());
+        }
+
+        public void LoadChildForm(Form child)
+        {
+            try
+            {
+                if (panelContent.Controls.Count > 0)
+                {
+                    var existing = panelContent.Controls[0];
+                    panelContent.Controls.Clear();
+                    existing.Dispose();
+                }
+                child.TopLevel = false;
+                child.FormBorderStyle = FormBorderStyle.None;
+                child.Dock = DockStyle.Fill;
+                panelContent.Controls.Add(child);
+                child.Show();
+                try { AnimationHelper.FadeIn(child, 300); } catch { }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"حدث خطأ أثناء تحميل الشاشة: {ex.Message}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  CLICK HANDLERS
+        // ══════════════════════════════════════════════════════
+        private void btnDashboard_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnDashboard);
+            LoadChildForm(new DashboardForm());
+        }
+        private void btnTreasury_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnTreasury);
+            LoadChildForm(new TreasuryForm());
+        }
+        private void btnWarehouse_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnWarehouse);
+            LoadChildForm(new WarehouseReportForm());
+        }
+        private void btnCustomers_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnCustomers);
+            LoadChildForm(new CustomerForm());
+        }
+        private void btnProducts_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnProducts);
+            LoadChildForm(new ProductForm());
+        }
+        private void btnInbound_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnInbound);
+            LoadChildForm(new InboundForm());
+        }
+        private void btnVehicles_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnVehicles);
+            LoadChildForm(new VehiclesForm());
+        }
+        private void btnSalesInvoices_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnSalesInvoices);
+            LoadChildForm(new SalesInvoicesForm());
+        }
+        private void btnEmployees_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnEmployees);
+            LoadChildForm(new EmployeesForm());
+        }
+        private void btnTransactions_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnTransactions);
+            LoadChildForm(new TransactionsForm());
+        }
+        private void btnBackup_Click(object sender, EventArgs e)
+        {
+            using (var form = new BackupForm())
+                form.ShowDialog(this);
+        }
+        private void btnLogout_Click(object sender, EventArgs e)
+        {
+            var confirm = MessageBox.Show("هل تريد تسجيل الخروج؟", "تأكيد",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm == DialogResult.Yes)
+            {
+                _clockTimer?.Stop();
+                _clockTimer?.Dispose();
+                this.Close();
+            }
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  SET ACTIVE
+        // ══════════════════════════════════════════════════════
+        private void SetActiveButton(Guna2Button active)
+        {
+            var buttons = new[]
+            {
+                btnDashboard, btnTreasury, btnWarehouse, btnCustomers,
+                btnProducts, btnInbound, btnVehicles, btnSalesInvoices,
+                btnEmployees, btnTransactions
+            };
+            foreach (var b in buttons)
+            {
+                if (b == null) continue;
+                b.FillColor = b == active
+                    ? ColorTranslator.FromHtml("#4E73DF")
+                    : ColorTranslator.FromHtml("#111827");
+                b.ForeColor = Color.White;
+            }
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            _clockTimer?.Stop();
+            _clockTimer?.Dispose();
+            base.OnFormClosed(e);
+        }
+    }
+}

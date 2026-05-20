@@ -1,0 +1,129 @@
+﻿using DistributionSystem.Business.Dtos;
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Windows.Forms;
+
+namespace DistributionSystem.Business.Services
+{
+    public class MonthlyReportScheduler : IDisposable
+    {
+        // FIX: System.Timers.Timer thread-safe
+        private readonly System.Timers.Timer _timer;
+        private readonly PdfReportService _pdfService;
+        private readonly VehicleService _vehicleService;
+        private bool _disposed;
+
+        // FIX: UI SynchronizationContext for NotifyIcon
+        private readonly SynchronizationContext _uiContext;
+
+        public MonthlyReportScheduler()
+        {
+            _pdfService = new PdfReportService();
+            _vehicleService = new VehicleService();
+            _uiContext = SynchronizationContext.Current;
+
+            _timer = new System.Timers.Timer(24 * 60 * 60 * 1000);
+            _timer.AutoReset = true;
+            _timer.Elapsed += (s, e) => SafeCheckAndRun();
+            _timer.Start();
+
+            ThreadPool.QueueUserWorkItem(_ => SafeCheckAndRun());
+        }
+
+        private void SafeCheckAndRun() { try { CheckAndRun(); } catch { } }
+
+        private void CheckAndRun()
+        {
+            var today = DateTime.Today;
+            if (today.Day != 1) return;
+
+            var prev = today.AddMonths(-1);
+            int month = prev.Month;
+            int year = prev.Year;
+
+            var vehicles = _vehicleService.GetAllVehicles()
+                ?.Where(v => v.IsActive).ToList()
+                ?? new List<VehicleDto>();
+
+            int generated = 0;
+            foreach (var v in vehicles)
+            {
+                try
+                {
+                    var orders = _vehicleService.GetAllDispatchOrders()
+                        ?.Where(o => o.VehicleId == v.Id
+                                  && o.CreatedAt.Month == month
+                                  && o.CreatedAt.Year == year)
+                        .ToList() ?? new List<DispatchOrderDto>();
+
+                    if (orders.Count == 0) continue;
+
+                    var pdf = _pdfService.GenerateVehicleMonthlyReport(v, orders, month, year);
+                    if (pdf == null || pdf.Length == 0) continue;
+
+                    string folder = System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                        "DistributionReports", SanitizeFileName(v.Name));
+                    Directory.CreateDirectory(folder);
+
+                    string filePath = System.IO.Path.Combine(folder, year + "-" + GetArabicMonthName(month) + ".pdf");
+                    File.WriteAllBytes(filePath, pdf);
+                    generated++;
+                }
+                catch { }
+            }
+
+            if (generated > 0) ShowBalloonTip(generated);
+        }
+
+        // FIX: NotifyIcon on UI thread via SynchronizationContext
+        private void ShowBalloonTip(int count)
+        {
+            void DoShow()
+            {
+                try
+                {
+                    using (var ni = new NotifyIcon())
+                    {
+                        ni.Visible = true;
+                        ni.Icon = SystemIcons.Information;
+                        ni.BalloonTipTitle = "تقارير التوزيع";
+                        ni.BalloonTipText = "تم انشاء " + count + " تقرير شهري تلقائيا";
+                        ni.BalloonTipIcon = ToolTipIcon.Info;
+                        ni.ShowBalloonTip(5000);
+                        Thread.Sleep(2000);
+                        ni.Visible = false;
+                    }
+                }
+                catch { }
+            }
+            if (_uiContext != null) _uiContext.Post(_ => DoShow(), null);
+            else ThreadPool.QueueUserWorkItem(_ => DoShow());
+        }
+
+        private static string SanitizeFileName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "vehicle";
+            foreach (char c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
+            return name.Trim();
+        }
+
+        private static readonly string[] _arabicMonths =
+            { "", "يناير", "فبراير", "مارس", "ابريل", "مايو", "يونيو",
+              "يوليو", "اغسطس", "سبتمبر", "اكتوبر", "نوفمبر", "ديسمبر" };
+
+        private static string GetArabicMonthName(int m) =>
+            (m >= 1 && m <= 12) ? _arabicMonths[m] : m.ToString();
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            try { _timer?.Stop(); _timer?.Dispose(); } catch { }
+            _disposed = true;
+        }
+    }
+}

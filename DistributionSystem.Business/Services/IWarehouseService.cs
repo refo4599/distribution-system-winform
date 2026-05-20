@@ -1,0 +1,14 @@
+using DistributionSystem.Business.Dtos;
+
+namespace DistributionSystem.Business.Services
+{
+    public interface IWarehouseService
+    {
+        PagedResult<WarehouseBalanceDto> GetWarehouseBalances(int page, int pageSize, string searchTerm);
+        decimal GetProductAverageCost(int productId);
+        decimal GetTotalInventoryValue();
+        void ProcessInbound(int productId, int quantity, decimal purchasePrice, string createdBy, int? referenceId = null);
+        void ProcessOutbound(int productId, int quantity, string createdBy, int? referenceId = null);
+        void ProcessReturn(int originalTransactionId, int quantity, string createdBy, int? referenceId = null);
+    }
+}

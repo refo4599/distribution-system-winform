@@ -1,0 +1,897 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using Guna.UI2.WinForms;
+using DistributionSystem.Business.Dtos;
+using DistributionSystem.Business.Services;
+
+namespace DistributionSystem.UI.Forms
+{
+    public partial class CustomerForm : Form
+    {
+        private readonly CustomerService _service = new CustomerService();
+        private Guna2DataGridView dgvNew;
+        private Guna2TextBox txtSearchNew;
+        private Label lblCountBadge;
+        private Guna2Button btnAddNew;
+        private System.Threading.Timer _searchTimer;
+
+        private List<CustomerDto> _allCustomers = new List<CustomerDto>();
+        private int _currentPage = 1;
+        private const int PageSize = 6;
+        private Panel _paginationBar;
+        private int TotalPages => Math.Max(1, (int)Math.Ceiling(_allCustomers.Count / (double)PageSize));
+
+        public CustomerForm()
+        {
+            InitializeComponent();
+            HideOldControls();
+
+            // Double Buffering — قبل بناء الـ UI
+            this.SetStyle(
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.UserPaint, true);
+            this.UpdateStyles();
+
+            BuildNewUI();
+
+            // الـ form تظهر فوراً ثم يتحمل الداتا
+            Shown += (s, e) => BeginInvoke(new Action(async () => await LoadCustomersAsync()));
+        }
+
+        private void HideOldControls()
+        {
+            try
+            {
+                lblName.Visible = false; txtName.Visible = false;
+                lblPhone.Visible = false; txtPhone.Visible = false;
+                lblAddress.Visible = false; txtAddress.Visible = false;
+                dgvCustomers.Visible = false;
+                btnAdd.Visible = false; btnUpdate.Visible = false;
+                btnDelete.Visible = false; btnClear.Visible = false;
+            }
+            catch { }
+        }
+
+        private void BuildNewUI()
+        {
+            RightToLeft = RightToLeft.Yes;
+            RightToLeftLayout = true;
+            BackColor = ColorTranslator.FromHtml("#EEF0F5");
+            Padding = new Padding(0);
+
+            this.SuspendLayout();
+
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                BackColor = Color.Transparent,
+                Padding = new Padding(0)
+            };
+            root.SuspendLayout();
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 88F));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            root.Controls.Add(BuildPageHeader(), 0, 0);
+            root.Controls.Add(BuildTableCard(), 0, 1);
+            root.ResumeLayout(false);
+
+            EnableDbAll(root);
+            Controls.Add(root);
+            root.BringToFront();
+            this.ResumeLayout(true);
+        }
+
+        // ??????????????????????????????????????????????????????
+        //  Double Buffer helper
+        // ??????????????????????????????????????????????????????
+        private static readonly PropertyInfo _dbProp =
+            typeof(Control).GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static void EnableDbAll(Control parent)
+        {
+            foreach (Control ctrl in parent.Controls)
+            { try { _dbProp?.SetValue(ctrl, true); } catch { } if (ctrl.Controls.Count > 0) EnableDbAll(ctrl); }
+        }
+
+        // ?? Cached GDI resources ??????????????????????????????
+        private static readonly SolidBrush _brWhite = new SolidBrush(Color.White);
+        private static readonly Font _fontName = new Font("Cairo", 11.5F, FontStyle.Bold);
+        private static readonly SolidBrush _brName = new SolidBrush(ColorTranslator.FromHtml("#0F172A"));
+        private static readonly StringFormat _sfCenter = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter };
+
+        // ??????????????????????????????????????????????????????
+        //  HEADER BANNER
+        // ??????????????????????????????????????????????????????
+        private Panel BuildPageHeader()
+        {
+            var pnl = new Panel { Dock = DockStyle.Fill, Height = 88, Padding = new Padding(0, 0, 0, 12), BackColor = Color.Transparent };
+            var banner = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
+
+            banner.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                var rc = new Rectangle(0, 0, banner.Width, banner.Height);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+                using (var br = new LinearGradientBrush(rc, ColorTranslator.FromHtml("#1a2f5e"), ColorTranslator.FromHtml("#1565c0"), LinearGradientMode.Horizontal))
+                using (var path = RoundPath(rc, 16))
+                    g.FillPath(br, path);
+                using (var dot = new SolidBrush(Color.FromArgb(18, 255, 255, 255)))
+                    for (int x = 10; x < banner.Width; x += 22)
+                        for (int y = 8; y < banner.Height; y += 22)
+                            g.FillEllipse(dot, x, y, 2, 2);
+                using (var cb = new SolidBrush(Color.FromArgb(14, 255, 255, 255)))
+                { g.FillEllipse(cb, banner.Width - 130, -50, 220, 220); g.FillEllipse(cb, banner.Width - 30, 20, 160, 160); }
+
+                // Title right-aligned
+                using (var tf = new Font("Cairo", 22F, FontStyle.Bold))
+                using (var tb = new SolidBrush(Color.White))
+                { var sz = g.MeasureString("إدارة العملاء", tf); g.DrawString("إدارة العملاء", tf, tb, banner.Width - sz.Width - 24, 8); }
+
+                // Subtitle
+                using (var sf2 = new Font("Cairo", 9.5F))
+                using (var sb2 = new SolidBrush(Color.FromArgb(200, 255, 255, 255)))
+                    g.DrawString("عرض وإدارة جميع العملاء", sf2, sb2, banner.Width - 202, 46);
+
+                // Accent lines
+                using (var b1 = new SolidBrush(ColorTranslator.FromHtml("#64B5F6")))
+                    g.FillRectangle(b1, banner.Width - 42, 44, 38, 3);
+                using (var b2 = new SolidBrush(Color.FromArgb(120, 100, 181, 246)))
+                    g.FillRectangle(b2, banner.Width - 60, 44, 14, 3);
+            };
+
+            btnAddNew = new Guna2Button
+            {
+                Text = "+ إضافة عميل",
+                FillColor = Color.FromArgb(30, 255, 255, 255),
+                ForeColor = Color.White,
+                BorderRadius = 12,
+                BorderThickness = 1,
+                BorderColor = Color.FromArgb(60, 255, 255, 255),
+                Font = new Font("Cairo", 11F, FontStyle.Bold),
+                Size = new Size(148, 44),
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                Location = new Point(20, (76 - 44) / 2)
+            };
+            btnAddNew.HoverState.FillColor = Color.FromArgb(55, 255, 255, 255);
+            btnAddNew.Click += (s, e) => ShowCustomerPopup();
+            banner.Controls.Add(btnAddNew);
+
+            pnl.Controls.Add(banner);
+            return pnl;
+        }
+
+        // ??????????????????????????????????????????????????????
+        //  TABLE CARD
+        // ??????????????????????????????????????????????????????
+        private Control BuildTableCard()
+        {
+            var card = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(0, 8, 0, 0) };
+            var container = new Guna2Panel { Dock = DockStyle.Fill, FillColor = Color.White, BorderRadius = 18, BorderThickness = 0 };
+            container.ShadowDecoration.Enabled = true; container.ShadowDecoration.Depth = 20; container.ShadowDecoration.Color = Color.FromArgb(14, 0, 0, 0);
+
+            var topBar = new Panel { Dock = DockStyle.Top, Height = 66, BackColor = Color.White };
+
+            // ?? Search box — border واضح + فونت واضح ??????????
+            txtSearchNew = new Guna2TextBox
+            {
+                Width = 230,
+                Height = 40,
+                BorderRadius = 10,
+                PlaceholderText = "ابحث عن عميل...",
+                FillColor = Color.White,
+                BorderColor = ColorTranslator.FromHtml("#94A3B8"),
+                BorderThickness = 2,
+                Font = new Font("Cairo", 11.5F),
+                TextAlign = HorizontalAlignment.Right,
+                ForeColor = ColorTranslator.FromHtml("#0F172A"),
+                PlaceholderForeColor = ColorTranslator.FromHtml("#94A3B8"),
+                Dock = DockStyle.None,
+                Location = new Point(16, (66 - 40) / 2)
+            };
+            txtSearchNew.FocusedState.BorderColor = ColorTranslator.FromHtml("#4E73DF");
+            txtSearchNew.FocusedState.FillColor = Color.White;
+            txtSearchNew.TextChanged += (s, e) =>
+            {
+                _searchTimer?.Dispose();
+                _currentPage = 1;
+                _searchTimer = new System.Threading.Timer(async _ =>
+                { try { await (Task)Invoke(new Func<Task>(LoadCustomersAsync)); } catch { } }, null, 350, System.Threading.Timeout.Infinite);
+            };
+            topBar.Controls.Add(txtSearchNew);
+
+            // ?? Search icon painted on topBar ??????????????????
+            topBar.Paint += (s, pe) =>
+            {
+                if (txtSearchNew == null) return;
+                var g = pe.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+                // عنوان الجدول في المنتصف
+                using (var tf = new Font("Cairo", 15F, FontStyle.Bold))
+                using (var tb = new SolidBrush(ColorTranslator.FromHtml("#0F172A")))
+                {
+                    var sz = g.MeasureString("قائمة العملاء", tf);
+                    g.DrawString("قائمة العملاء", tf, tb, (topBar.Width - sz.Width) / 2f, (topBar.Height - sz.Height) / 2f);
+                }
+
+                // أيقونة البحث — أوضح وأكبر
+                int ix = txtSearchNew.Left + 10, iy = txtSearchNew.Top + (txtSearchNew.Height - 16) / 2;
+                using (var pen = new Pen(ColorTranslator.FromHtml("#64748B"), 2f))
+                {
+                    g.DrawEllipse(pen, ix, iy, 13, 13);
+                    g.DrawLine(pen, ix + 11, iy + 11, ix + 17, iy + 17);
+                }
+            };
+
+            // ?? Count badge ????????????????????????????????????
+            lblCountBadge = new Label
+            {
+                Text = "0 عميل",
+                BackColor = Color.Transparent,
+                ForeColor = Color.Transparent,
+                AutoSize = false,
+                Size = new Size(1, 1),
+                Location = new Point(-100, -100)
+            };
+            lblCountBadge.TextChanged += (s, e) => topBar.Invalidate();
+            topBar.Controls.Add(lblCountBadge);
+
+            // Badge painted inside topBar.Paint above — add badge paint to topBar
+            topBar.Paint += (s2, pe2) =>
+            {
+                if (lblCountBadge == null) return;
+                var g = pe2.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+                string badge = lblCountBadge.Text;
+                using (var bf = new Font("Cairo", 11F, FontStyle.Bold))
+                {
+                    var bsz = g.MeasureString(badge, bf);
+                    int bw = (int)bsz.Width + 24, bh = 34;
+                    int bx = topBar.Width - bw - 20, by = (topBar.Height - bh) / 2;
+                    var brc = new Rectangle(bx, by, bw, bh);
+                    using (var path = RoundPath(brc, bh / 2))
+                    using (var br = new LinearGradientBrush(brc, ColorTranslator.FromHtml("#4E73DF"), ColorTranslator.FromHtml("#3B5DC9"), LinearGradientMode.Vertical))
+                        g.FillPath(br, path);
+                    g.DrawString(badge, bf, Brushes.White, new RectangleF(bx, by, bw, bh),
+                        new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
+                }
+            };
+
+            var sep = new Panel { Dock = DockStyle.Top, Height = 2, BackColor = ColorTranslator.FromHtml("#E2E8F0") };
+
+            // ?? DataGridView ????????????????????????????????????
+            dgvNew = new Guna2DataGridView
+            {
+                Dock = DockStyle.Fill,
+                RightToLeft = RightToLeft.Yes,
+                AutoGenerateColumns = false,
+                ColumnHeadersHeight = 44,
+                EnableHeadersVisualStyles = false,
+                BackgroundColor = Color.White,
+                BorderStyle = BorderStyle.None,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                RowHeadersVisible = false,
+                AllowUserToAddRows = false,
+                ReadOnly = true,
+                CellBorderStyle = DataGridViewCellBorderStyle.None,
+                ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None,
+                AllowUserToResizeRows = false,
+                ScrollBars = ScrollBars.Vertical,
+                GridColor = Color.White,
+                BackColor = Color.White
+            };
+            dgvNew.RowTemplate.Height = 70;
+            dgvNew.AdvancedCellBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
+
+            // Header — dark navy مطابق للـ ProductForm
+            dgvNew.ColumnHeadersDefaultCellStyle.BackColor = ColorTranslator.FromHtml("#1e3a6e");
+            dgvNew.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+            dgvNew.ColumnHeadersDefaultCellStyle.Font = new Font("Cairo", 10.5F, FontStyle.Bold);
+            dgvNew.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            dgvNew.ColumnHeadersDefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#1e3a6e");
+            dgvNew.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
+
+            dgvNew.DefaultCellStyle.BackColor = Color.White;
+            dgvNew.DefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#EEF2FF");
+            dgvNew.DefaultCellStyle.SelectionForeColor = ColorTranslator.FromHtml("#0F172A");
+            dgvNew.DefaultCellStyle.Font = new Font("Cairo", 11F);
+            dgvNew.DefaultCellStyle.ForeColor = ColorTranslator.FromHtml("#374151");
+            dgvNew.AlternatingRowsDefaultCellStyle.BackColor = ColorTranslator.FromHtml("#EEF2FF");
+
+            try { typeof(DataGridView).GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(dgvNew, true); } catch { }
+
+            BuildColumns();
+            dgvNew.CellPainting += Dgv_CellPainting;
+            dgvNew.CellClick += Dgv_CellClick;
+            dgvNew.Resize += (s, e) => FitColumns();
+
+            var dgvWrapper = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(0) };
+            dgvWrapper.Controls.Add(dgvNew);
+
+            _paginationBar = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Color.White, Padding = new Padding(16, 0, 16, 0) };
+            _paginationBar.Paint += (s, pe) => { using (var pen = new Pen(ColorTranslator.FromHtml("#E2E8F0"), 1f)) pe.Graphics.DrawLine(pen, 0, 0, _paginationBar.Width, 0); };
+
+            container.Controls.Add(dgvWrapper); container.Controls.Add(_paginationBar); container.Controls.Add(sep); container.Controls.Add(topBar);
+            card.Controls.Add(container);
+            return card;
+        }
+
+        private void BuildColumns()
+        {
+            dgvNew.Columns.Clear();
+            void Add(string n, string h, string p, int w) => dgvNew.Columns.Add(new DataGridViewTextBoxColumn { Name = n, HeaderText = h, DataPropertyName = p, Width = w });
+            Add("Name", "اسم العميل", "Name", 200);
+            Add("Phone", "رقم الهاتف", "Phone", 160);
+            Add("Address", "العنوان", "Address", 200);
+            Add("Actions", "الإجراءات", "", 130);
+
+            // View details column (eye icon) - button column with Unicode eye
+            var viewCol = new DataGridViewButtonColumn
+            {
+                Name = "View",
+                HeaderText = "عرض",
+                Text = "👁️",
+                UseColumnTextForButtonValue = true,
+                Width = 60
+            };
+            dgvNew.Columns.Add(viewCol);
+
+            foreach (DataGridViewColumn c in dgvNew.Columns)
+                c.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        }
+
+        private void CustomerForm_Load(object sender, EventArgs e) { }
+
+        // ??????????????????????????????????????????????????????
+        //  DATA
+        // ??????????????????????????????????????????????????????
+        private async Task LoadCustomersAsync()
+        {
+            try
+            {
+                var q = txtSearchNew?.Text?.Trim() ?? "";
+                var all = await Task.Run(() =>
+                {
+                    var list = (_service.GetAll() ?? Enumerable.Empty<CustomerDto>()).ToList();
+                    if (!string.IsNullOrEmpty(q))
+                        list = list.Where(x =>
+                            (x.Name?.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                            (x.Phone?.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
+                    return list;
+                });
+
+                _allCustomers = all;
+                _currentPage = Math.Min(_currentPage, TotalPages);
+                var page = _allCustomers.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
+                dgvNew.DataSource = new BindingSource { DataSource = page };
+                FitColumns();
+                if (lblCountBadge != null) lblCountBadge.Text = $"{_allCustomers.Count} عميل";
+                RenderPagination();
+            }
+            catch (Exception ex) { MessageBox.Show($"فشل تحميل العملاء: {ex.Message}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        }
+
+        private void FitColumns()
+        {
+            if (dgvNew == null || dgvNew.Columns.Count == 0) return;
+            int w = dgvNew.ClientSize.Width; if (w <= 0) return;
+            int wName = (int)(w * 0.28);
+            int wPhone = (int)(w * 0.22);
+            int wAddr = (int)(w * 0.28);
+            int wView = 60; // fixed
+            int wAct = w - wName - wPhone - wAddr - wView;
+            dgvNew.Columns["Name"].Width = Math.Max(120, wName);
+            dgvNew.Columns["Phone"].Width = Math.Max(100, wPhone);
+            dgvNew.Columns["Address"].Width = Math.Max(120, wAddr);
+            if (dgvNew.Columns.Contains("Actions")) dgvNew.Columns["Actions"].Width = Math.Max(110, wAct);
+            if (dgvNew.Columns.Contains("View")) dgvNew.Columns["View"].Width = Math.Max(50, wView);
+        }
+
+        // ??????????????????????????????????????????????????????
+        //  PAGINATION
+        // ??????????????????????????????????????????????????????
+        private void RenderPagination()
+        {
+            if (_paginationBar == null) return;
+            _paginationBar.Controls.Clear();
+            int total = TotalPages;
+            var lblInfo = new Label
+            {
+                Text = $"عرض {Math.Min(_allCustomers.Count, (_currentPage - 1) * PageSize + 1)}-{Math.Min(_allCustomers.Count, _currentPage * PageSize)} من {_allCustomers.Count}",
+                Font = new Font("Cairo", 9.5F),
+                ForeColor = ColorTranslator.FromHtml("#64748B"),
+                AutoSize = false,
+                Width = 180,
+                Height = 56,
+                TextAlign = ContentAlignment.MiddleRight,
+                Dock = DockStyle.Right,
+                BackColor = Color.Transparent
+            };
+            _paginationBar.Controls.Add(lblInfo);
+
+            var pnlPages = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, BackColor = Color.Transparent, WrapContents = false, Padding = new Padding(0) };
+            pnlPages.Controls.Add(MakeNavBtn("›", _currentPage < total, () => { _currentPage++; _ = LoadCustomersAsync(); }));
+            for (int i = total; i >= 1; i--)
+            {
+                int pg = i; bool cur = pg == _currentPage;
+                var btn = new Panel { Size = new Size(36, 36), BackColor = Color.Transparent, Cursor = cur ? Cursors.Default : Cursors.Hand, Margin = new Padding(3, 10, 3, 10) };
+                btn.Paint += (s, pe) =>
+                {
+                    var g = pe.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+                    var rc = new Rectangle(0, 0, btn.Width - 1, btn.Height - 1);
+                    if (cur)
+                    {
+                        using (var br = new LinearGradientBrush(rc, ColorTranslator.FromHtml("#4E73DF"), ColorTranslator.FromHtml("#3B5DC9"), LinearGradientMode.Vertical))
+                        using (var path = RoundPath(rc, 8)) g.FillPath(br, path);
+                        using (var f = new Font("Cairo", 10F, FontStyle.Bold))
+                            g.DrawString(pg.ToString(), f, Brushes.White, rc, new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
+                    }
+                    else
+                    {
+                        using (var path = RoundPath(rc, 8)) { g.FillPath(new SolidBrush(ColorTranslator.FromHtml("#F8FAFC")), path); g.DrawPath(new Pen(ColorTranslator.FromHtml("#E2E8F0"), 1f), path); }
+                        using (var f = new Font("Cairo", 10F)) using (var tb = new SolidBrush(ColorTranslator.FromHtml("#374151")))
+                            g.DrawString(pg.ToString(), f, tb, rc, new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
+                    }
+                };
+                if (!cur) btn.Click += (s, e) => { _currentPage = pg; _ = LoadCustomersAsync(); };
+                pnlPages.Controls.Add(btn);
+            }
+            pnlPages.Controls.Add(MakeNavBtn("‹", _currentPage > 1, () => { _currentPage--; _ = LoadCustomersAsync(); }));
+            _paginationBar.Controls.Add(pnlPages);
+        }
+
+        private Panel MakeNavBtn(string text, bool enabled, Action onClick)
+        {
+            var btn = new Panel { Size = new Size(36, 36), BackColor = Color.Transparent, Cursor = enabled ? Cursors.Hand : Cursors.Default, Margin = new Padding(3, 10, 3, 10) };
+            btn.Paint += (s, pe) =>
+            {
+                var g = pe.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; var rc = new Rectangle(0, 0, btn.Width - 1, btn.Height - 1);
+                using (var path = RoundPath(rc, 8)) { g.FillPath(new SolidBrush(enabled ? ColorTranslator.FromHtml("#F8FAFC") : ColorTranslator.FromHtml("#F1F5F9")), path); g.DrawPath(new Pen(ColorTranslator.FromHtml("#E2E8F0"), 1f), path); }
+                using (var f = new Font("Segoe UI", 13F)) using (var tb = new SolidBrush(enabled ? ColorTranslator.FromHtml("#374151") : ColorTranslator.FromHtml("#CBD5E1")))
+                    g.DrawString(text, f, tb, rc, new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
+            };
+            if (enabled) btn.Click += (s, e) => onClick();
+            return btn;
+        }
+
+        // ??????????????????????????????????????????????????????
+        //  GRID EVENTS
+        // ??????????????????????????????????????????????????????
+        private void Dgv_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            var colName = dgvNew.Columns[e.ColumnIndex].Name;
+            var dto = dgvNew.Rows[e.RowIndex].DataBoundItem as CustomerDto;
+            if (dto == null) return;
+
+            if (colName == "View")
+            {
+                try
+                {
+                    using (var details = new CustomerDetailsForm(dto.Id))
+                    {
+                        // smooth opening if helper exists
+                        try { AnimationHelper.FadeIn(details, 200); } catch { }
+                        details.ShowDialog(this);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("فشل فتح تفاصيل العميل: " + ex.Message, "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                return;
+            }
+
+            if (colName != "Actions") return;
+
+            var cell = dgvNew.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, false);
+            var mouse = dgvNew.PointToClient(Cursor.Position);
+            int btnH = 32, btnY = cell.Top + (cell.Height - btnH) / 2, editW = 62, delW = 32, gap = 8;
+            int startX = cell.Left + (cell.Width - editW - gap - delW) / 2;
+
+            if (new Rectangle(startX, btnY, editW, btnH).Contains(mouse))
+                ShowCustomerPopup(dto);
+            else if (new Rectangle(startX + editW + gap, btnY, delW, btnH).Contains(mouse))
+                if (ShowDeleteConfirm(dto.Name))
+                    try { _service.Delete(dto.Id); _ = LoadCustomersAsync(); }
+                    catch (Exception ex) { ShowErrorDialog(dto.Name, ex.Message); }
+        }
+
+        // ??????????????????????????????????????????????????????
+        //  CELL PAINTING
+        // ??????????????????????????????????????????????????????
+        private void Dgv_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
+        {
+            try
+            {
+                // ?? HEADER ??
+                if (e.RowIndex == -1)
+                {
+                    e.Handled = true;
+                    var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+                    using (var br = new LinearGradientBrush(e.CellBounds,
+                        ColorTranslator.FromHtml("#1e3a6e"), ColorTranslator.FromHtml("#243f7a"),
+                        LinearGradientMode.Vertical))
+                        g.FillRectangle(br, e.CellBounds);
+                    using (var font = new Font("Cairo", 10.5F, FontStyle.Bold))
+                    using (var tb = new SolidBrush(Color.White))
+                        g.DrawString(e.Value?.ToString() ?? "", font, tb, e.CellBounds,
+                            new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
+                    // فاصل عمودي خفيف
+                    using (var sp = new Pen(Color.FromArgb(40, 255, 255, 255), 1f))
+                    {
+                        g.DrawLine(sp, e.CellBounds.Left, e.CellBounds.Top + 6, e.CellBounds.Left, e.CellBounds.Bottom - 6);
+                        g.DrawLine(sp, e.CellBounds.Right - 1, e.CellBounds.Top + 6, e.CellBounds.Right - 1, e.CellBounds.Bottom - 6);
+                    }
+                    return;
+                }
+                if (e.RowIndex < 0) return;
+
+                bool sel = dgvNew.Rows[e.RowIndex].Selected;
+                Color bg = sel ? ColorTranslator.FromHtml("#EEF2FF")
+                               : (e.RowIndex % 2 == 0 ? Color.White : ColorTranslator.FromHtml("#EEF2FF"));
+                var col = dgvNew.Columns[e.ColumnIndex].Name;
+
+                if (col == "Actions")
+                    PaintActionsCell(e, bg);
+                else
+                {
+                    e.Handled = true;
+                    e.Graphics.FillRectangle(bg == Color.White ? _brWhite : new SolidBrush(bg), e.CellBounds);
+                    e.PaintContent(e.CellBounds);
+                }
+
+                // فاصل أبيض بين الصفوف
+                using (var wPen = new Pen(Color.White, 2f))
+                {
+                    e.Graphics.DrawLine(wPen, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right, e.CellBounds.Bottom - 1);
+                    e.Graphics.DrawLine(wPen, e.CellBounds.Left, e.CellBounds.Top, e.CellBounds.Left, e.CellBounds.Bottom);
+                    e.Graphics.DrawLine(wPen, e.CellBounds.Right - 1, e.CellBounds.Top, e.CellBounds.Right - 1, e.CellBounds.Bottom);
+                }
+            }
+            catch { }
+        }
+
+        private void PaintActionsCell(DataGridViewCellPaintingEventArgs e, Color bg)
+        {
+            e.Handled = true; var g = e.Graphics; g.SetClip(e.CellBounds);
+            g.FillRectangle(bg == Color.White ? _brWhite : new SolidBrush(bg), e.CellBounds);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            int btnH = 32, btnY = e.CellBounds.Top + (e.CellBounds.Height - btnH) / 2, editW = 62, delW = 32, gap = 8;
+            int startX = e.CellBounds.Left + (e.CellBounds.Width - editW - gap - delW) / 2;
+
+            // زرار تعديل
+            var editRect = new Rectangle(startX, btnY, editW, btnH);
+            using (var path = RoundPath(editRect, 8)) { g.FillPath(new SolidBrush(ColorTranslator.FromHtml("#EFF6FF")), path); g.DrawPath(new Pen(ColorTranslator.FromHtml("#BFDBFE"), 1f), path); }
+            using (var f = new Font("Cairo", 9.5F, FontStyle.Bold)) using (var tb = new SolidBrush(ColorTranslator.FromHtml("#2563EB")))
+            { var sz = g.MeasureString("تعديل", f); g.DrawString("تعديل", f, tb, editRect.Left + (editRect.Width - sz.Width) / 2f, editRect.Top + (editRect.Height - sz.Height) / 2f); }
+
+            // زرار حذف
+            var delRect = new Rectangle(startX + editW + gap, btnY, delW, btnH);
+            using (var path2 = RoundPath(delRect, 8)) { g.FillPath(new SolidBrush(ColorTranslator.FromHtml("#FEF2F2")), path2); g.DrawPath(new Pen(ColorTranslator.FromHtml("#FECACA"), 1f), path2); }
+            using (var pen = new Pen(ColorTranslator.FromHtml("#EF4444"), 1.6f))
+            { int cx = delRect.Left + delRect.Width / 2, cy = delRect.Top + delRect.Height / 2; g.DrawLine(pen, cx - 5, cy - 4, cx + 5, cy - 4); g.DrawLine(pen, cx - 2, cy - 6, cx + 2, cy - 6); g.DrawRectangle(pen, cx - 4, cy - 3, 8, 7); g.DrawLine(pen, cx - 1, cy - 1, cx - 1, cy + 3); g.DrawLine(pen, cx + 1, cy - 1, cx + 1, cy + 3); }
+            g.ResetClip();
+        }
+
+        // ??????????????????????????????????????????????????????
+        //  CUSTOM DELETE CONFIRMATION DIALOG
+        // ??????????????????????????????????????????????????????
+        // ??????????????????????????????????????????????????????
+        //  ERROR DIALOG — لا يمكن الحذف
+        // ??????????????????????????????????????????????????????
+        private void ShowErrorDialog(string entityName, string rawError)
+        {
+            bool isFk = rawError != null && (
+                rawError.Contains("FOREIGN KEY") || rawError.Contains("REFERENCE") ||
+                rawError.Contains("service operation") || rawError.Contains("constraint"));
+
+            string title = isFk ? "لا يمكن حذف العميل" : "حدث خطأ";
+            string line1 = isFk ? $"لا يمكن حذف العميل \"{entityName}\"" : $"حدث خطأ غير متوقع";
+            string line2 = isFk ? $"لأن لديه فواتير مبيعات مسجّلة في النظام." : rawError;
+            string line3 = isFk ? "يجب حذف الفواتير المرتبطة أولاً ثم المحاولة مجدداً." : "";
+
+            var dlg = new Form
+            {
+                FormBorderStyle = FormBorderStyle.None,
+                StartPosition = FormStartPosition.CenterParent,
+                Size = new Size(440, 260),
+                BackColor = Color.White,
+                ShowInTaskbar = false,
+                TopMost = true,
+                RightToLeft = RightToLeft.Yes,
+                RightToLeftLayout = true
+            };
+            using (var rgn = new GraphicsPath())
+            {
+                rgn.AddArc(0, 0, 32, 32, 180, 90); rgn.AddArc(dlg.Width - 32, 0, 32, 32, 270, 90);
+                rgn.AddArc(dlg.Width - 32, dlg.Height - 32, 32, 32, 0, 90); rgn.AddArc(0, dlg.Height - 32, 32, 32, 90, 90);
+                rgn.CloseFigure(); dlg.Region = new Region(rgn);
+            }
+            var root = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
+
+            // ?? Header برتقالي مع أيقونة تحذير ??????????????????
+            var header = new Panel { Dock = DockStyle.Top, Height = 82, BackColor = Color.Transparent };
+            header.Paint += (s, pe) =>
+            {
+                var g = pe.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+                var rc = new Rectangle(0, 0, header.Width, header.Height);
+                // gradient برتقالي
+                using (var br = new LinearGradientBrush(rc,
+                    ColorTranslator.FromHtml("#B45309"), ColorTranslator.FromHtml("#D97706"),
+                    LinearGradientMode.Horizontal)) g.FillRectangle(br, rc);
+                // نقاط خلفية
+                using (var dot = new SolidBrush(Color.FromArgb(18, 255, 255, 255)))
+                    for (int x = 8; x < header.Width; x += 20) for (int y = 6; y < header.Height; y += 20) g.FillEllipse(dot, x, y, 2, 2);
+                using (var cb = new SolidBrush(Color.FromArgb(12, 255, 255, 255))) g.FillEllipse(cb, header.Width - 110, -40, 190, 190);
+                // أيقونة دائرة ! في الركن
+                int ix = header.Width - 62, iy = 18, isz = 46;
+                using (var ip = RoundPath(new Rectangle(ix, iy, isz, isz), 23))
+                    g.FillPath(new SolidBrush(Color.FromArgb(45, 255, 255, 255)), ip);
+                using (var pen = new Pen(Color.White, 3f)) using (var wBr = new SolidBrush(Color.White))
+                {
+                    int cx = ix + isz / 2, cy = iy + isz / 2;
+                    g.DrawLine(pen, cx, cy - 11, cx, cy + 1);   // الخط
+                    g.FillEllipse(wBr, cx - 3, cy + 7, 6, 6);   // النقطة
+                }
+                // عنوان
+                using (var tf = new Font("Cairo", 15F, FontStyle.Bold)) using (var tb = new SolidBrush(Color.White))
+                { var tsz = g.MeasureString(title, tf); g.DrawString(title, tf, tb, header.Width - tsz.Width - 70, 12); }
+                // عنوان فرعي
+                using (var sf2 = new Font("Cairo", 9.5F)) using (var sb2 = new SolidBrush(Color.FromArgb(210, 255, 255, 255)))
+                    g.DrawString("تعذّر تنفيذ عملية الحذف", sf2, sb2, header.Width - 222, 50);
+            };
+
+            // ?? Body — رسائل توضيحية ?????????????????????????????
+            var body = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(22, 16, 22, 0) };
+            var msgPanel = new Panel { Dock = DockStyle.Top, Height = 92, BackColor = Color.Transparent };
+            msgPanel.Paint += (s, pe) =>
+            {
+                var g = pe.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+                var rc = new Rectangle(0, 0, msgPanel.Width - 1, msgPanel.Height - 1);
+                // خلفية صفراء فاتحة
+                using (var path = RoundPath(rc, 12))
+                {
+                    g.FillPath(new SolidBrush(ColorTranslator.FromHtml("#FFFBEB")), path);
+                    g.DrawPath(new Pen(ColorTranslator.FromHtml("#FDE68A"), 1.5f), path);
+                }
+                // السطر الأول — اسم العميل بولد
+                using (var f1 = new Font("Cairo", 11.5F, FontStyle.Bold)) using (var b1 = new SolidBrush(ColorTranslator.FromHtml("#92400E")))
+                {
+                    var s1 = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Near };
+                    g.DrawString(line1, f1, b1, new RectangleF(12, 10, msgPanel.Width - 24, 28), s1);
+                }
+                // السطر الثاني
+                using (var f2 = new Font("Cairo", 10.5F)) using (var b2 = new SolidBrush(ColorTranslator.FromHtml("#78350F")))
+                {
+                    var s2 = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Near };
+                    g.DrawString(line2, f2, b2, new RectangleF(12, 40, msgPanel.Width - 24, 26), s2);
+                }
+                // السطر الثالث (hint) لو فيه
+                if (!string.IsNullOrEmpty(line3))
+                    using (var f3 = new Font("Cairo", 9.5F, FontStyle.Italic)) using (var b3 = new SolidBrush(ColorTranslator.FromHtml("#A16207")))
+                    {
+                        var s3 = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Near };
+                        g.DrawString(line3, f3, b3, new RectangleF(12, 66, msgPanel.Width - 24, 24), s3);
+                    }
+            };
+            body.Controls.Add(msgPanel);
+
+            // ?? Footer ????????????????????????????????????????????
+            var footer = new Panel { Dock = DockStyle.Bottom, Height = 64, BackColor = Color.White, Padding = new Padding(24, 10, 24, 14) };
+            var btnOk = new Guna2Button
+            {
+                Dock = DockStyle.Fill,
+                Text = "حسناً، فهمت",
+                BorderRadius = 12,
+                FillColor = ColorTranslator.FromHtml("#D97706"),
+                ForeColor = Color.White,
+                Font = new Font("Cairo", 11F, FontStyle.Bold),
+                Animated = true
+            };
+            btnOk.HoverState.FillColor = ColorTranslator.FromHtml("#B45309");
+            btnOk.ShadowDecoration.Enabled = true;
+            btnOk.ShadowDecoration.Color = Color.FromArgb(40, 217, 119, 6);
+            btnOk.ShadowDecoration.Depth = 8;
+            btnOk.Click += (s, e) => dlg.Close();
+            footer.Controls.Add(btnOk);
+
+            root.Controls.Add(body); root.Controls.Add(footer); root.Controls.Add(header);
+            dlg.Controls.Add(root);
+            dlg.KeyPreview = true;
+            dlg.KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape || e.KeyCode == Keys.Return) dlg.Close(); };
+            dlg.ShowDialog(this);
+        }
+
+        private bool ShowDeleteConfirm(string customerName)
+        {
+            bool result = false;
+            var dlg = new Form
+            {
+                FormBorderStyle = FormBorderStyle.None,
+                StartPosition = FormStartPosition.CenterParent,
+                Size = new Size(420, 260),
+                BackColor = Color.White,
+                ShowInTaskbar = false,
+                TopMost = true,
+                RightToLeft = RightToLeft.Yes,
+                RightToLeftLayout = true
+            };
+            using (var rgn = new GraphicsPath())
+            {
+                rgn.AddArc(0, 0, 32, 32, 180, 90); rgn.AddArc(dlg.Width - 32, 0, 32, 32, 270, 90);
+                rgn.AddArc(dlg.Width - 32, dlg.Height - 32, 32, 32, 0, 90); rgn.AddArc(0, dlg.Height - 32, 32, 32, 90, 90);
+                rgn.CloseFigure(); dlg.Region = new Region(rgn);
+            }
+            var root = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
+
+            // Header أحمر
+            var header = new Panel { Dock = DockStyle.Top, Height = 90, BackColor = Color.Transparent };
+            header.Paint += (s, pe) =>
+            {
+                var g = pe.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+                var rc = new Rectangle(0, 0, header.Width, header.Height);
+                using (var br = new LinearGradientBrush(rc, ColorTranslator.FromHtml("#C0392B"), ColorTranslator.FromHtml("#E74C3C"), LinearGradientMode.Horizontal))
+                    g.FillRectangle(br, rc);
+                using (var dot = new SolidBrush(Color.FromArgb(18, 255, 255, 255)))
+                    for (int x = 8; x < header.Width; x += 20) for (int y = 6; y < header.Height; y += 20) g.FillEllipse(dot, x, y, 2, 2);
+                using (var cb = new SolidBrush(Color.FromArgb(14, 255, 255, 255))) g.FillEllipse(cb, header.Width - 110, -40, 190, 190);
+                // أيقونة سلة
+                int ix = header.Width - 62, iy = 22, isz = 46;
+                var iconBg = new Rectangle(ix, iy, isz, isz);
+                using (var ip = RoundPath(iconBg, 12)) { g.FillPath(new SolidBrush(Color.FromArgb(40, 255, 255, 255)), ip); g.DrawPath(new Pen(Color.FromArgb(60, 255, 255, 255), 1f), ip); }
+                using (var pen = new Pen(Color.White, 2f))
+                { int cx = ix + isz / 2, cy = iy + isz / 2; g.DrawLine(pen, cx - 10, cy - 8, cx + 10, cy - 8); g.DrawLine(pen, cx - 5, cy - 12, cx + 5, cy - 12); g.DrawRectangle(pen, cx - 9, cy - 6, 18, 16); g.DrawLine(pen, cx - 3, cy - 2, cx - 3, cy + 6); g.DrawLine(pen, cx + 3, cy - 2, cx + 3, cy + 6); }
+                using (var tf = new Font("Cairo", 18F, FontStyle.Bold)) using (var tb = new SolidBrush(Color.White))
+                { var tsz = g.MeasureString("حذف العميل", tf); g.DrawString("حذف العميل", tf, tb, header.Width - tsz.Width - 68, 14); }
+                using (var sf2 = new Font("Cairo", 10F)) using (var sb2 = new SolidBrush(Color.FromArgb(200, 255, 255, 255)))
+                    g.DrawString("هذا الإجراء لا يمكن التراجع عنه", sf2, sb2, header.Width - 238, 52);
+            };
+
+            var body = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(28, 18, 28, 0) };
+            var nameBox = new Panel { Dock = DockStyle.Top, Height = 50, BackColor = ColorTranslator.FromHtml("#FEF2F2") };
+            nameBox.Paint += (s, pe) =>
+            {
+                var g = pe.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
+                var rc = new Rectangle(0, 0, nameBox.Width - 1, nameBox.Height - 1);
+                using (var path = RoundPath(rc, 10)) { g.FillPath(new SolidBrush(ColorTranslator.FromHtml("#FEF2F2")), path); g.DrawPath(new Pen(ColorTranslator.FromHtml("#FECACA"), 1.5f), path); }
+                using (var f = new Font("Cairo", 12F, FontStyle.Bold)) using (var b = new SolidBrush(ColorTranslator.FromHtml("#B91C1C")))
+                    g.DrawString($"  {customerName}  ", f, b, rc, new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center });
+            };
+            var lblQ = new Label { Text = "هل أنت متأكد من حذف هذا العميل؟", Font = new Font("Cairo", 12F), ForeColor = ColorTranslator.FromHtml("#374151"), Dock = DockStyle.Top, Height = 36, TextAlign = ContentAlignment.MiddleCenter, BackColor = Color.Transparent };
+            body.Controls.Add(nameBox); body.Controls.Add(lblQ);
+
+            var footer = new Panel { Dock = DockStyle.Bottom, Height = 72, BackColor = Color.White, Padding = new Padding(24, 12, 24, 20) };
+            var tbl = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Color.Transparent };
+            tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F)); tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+
+            var btnCancel = new Guna2Button { Dock = DockStyle.Fill, Text = "إلغاء", BorderRadius = 12, FillColor = ColorTranslator.FromHtml("#F1F5F9"), ForeColor = ColorTranslator.FromHtml("#64748B"), BorderColor = ColorTranslator.FromHtml("#E2E8F0"), BorderThickness = 1, Font = new Font("Cairo", 11F, FontStyle.Bold), Margin = new Padding(0, 0, 6, 0) };
+            btnCancel.HoverState.FillColor = ColorTranslator.FromHtml("#E2E8F0");
+            btnCancel.Click += (s, e) => dlg.Close();
+
+            var btnConfirm = new Guna2Button { Dock = DockStyle.Fill, Text = "حذف", BorderRadius = 12, FillColor = ColorTranslator.FromHtml("#EF4444"), ForeColor = Color.White, Font = new Font("Cairo", 11F, FontStyle.Bold), Margin = new Padding(6, 0, 0, 0), Animated = true };
+            btnConfirm.HoverState.FillColor = ColorTranslator.FromHtml("#DC2626");
+            btnConfirm.ShadowDecoration.Enabled = true; btnConfirm.ShadowDecoration.Color = Color.FromArgb(40, 239, 68, 68); btnConfirm.ShadowDecoration.Depth = 8;
+            btnConfirm.Click += (s, e) => { result = true; dlg.Close(); };
+
+            tbl.Controls.Add(btnCancel, 0, 0); tbl.Controls.Add(btnConfirm, 1, 0);
+            footer.Controls.Add(tbl);
+            root.Controls.Add(body); root.Controls.Add(footer); root.Controls.Add(header);
+            dlg.Controls.Add(root);
+            dlg.KeyPreview = true;
+            dlg.KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape) dlg.Close(); };
+            dlg.ShowDialog(this);
+            return result;
+        }
+
+        // ??????????????????????????????????????????????????????
+        //  POPUP — إضافة / تعديل عميل
+        // ??????????????????????????????????????????????????????
+        private void btnAdd_Click(object sender, EventArgs e) => ShowCustomerPopup();
+
+        private async void ShowCustomerPopup(CustomerDto editDto = null)
+        {
+            bool isEdit = editDto != null;
+            var popupForm = new Form
+            {
+                FormBorderStyle = FormBorderStyle.None,
+                StartPosition = FormStartPosition.Manual,
+                Size = new Size(480, 420),
+                BackColor = Color.White,
+                ShowInTaskbar = false,
+                TopMost = true,
+                RightToLeft = RightToLeft.Yes,
+                RightToLeftLayout = true
+            };
+            var screen = Screen.FromControl(this).WorkingArea;
+            popupForm.Location = new Point(screen.Left + (screen.Width - popupForm.Width) / 2, screen.Top + (screen.Height - popupForm.Height) / 2);
+            using (var rgn = new GraphicsPath())
+            { rgn.AddArc(0, 0, 40, 40, 180, 90); rgn.AddArc(popupForm.Width - 40, 0, 40, 40, 270, 90); rgn.AddArc(popupForm.Width - 40, popupForm.Height - 40, 40, 40, 0, 90); rgn.AddArc(0, popupForm.Height - 40, 40, 40, 90, 90); rgn.CloseFigure(); popupForm.Region = new Region(rgn); }
+
+            var popup = new Guna2Panel { Dock = DockStyle.Fill, BorderRadius = 0, FillColor = Color.White, BackColor = Color.White };
+            popup.ShadowDecoration.Enabled = true; popup.ShadowDecoration.Depth = 30; popup.ShadowDecoration.Color = Color.FromArgb(60, 0, 0, 0);
+            popupForm.Controls.Add(popup);
+            Action closePopup = () => { try { popupForm.Close(); popupForm.Dispose(); } catch { } };
+
+            var pnlHead = new Panel { Dock = DockStyle.Top, Height = 92, BackColor = Color.Transparent };
+            pnlHead.Paint += (s, pe) =>
+            {
+                var g = pe.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; var rc = new Rectangle(0, 0, pnlHead.Width, pnlHead.Height);
+                using (var br = new LinearGradientBrush(rc, ColorTranslator.FromHtml("#1a2f5e"), ColorTranslator.FromHtml("#1565c0"), LinearGradientMode.Horizontal)) g.FillRectangle(br, rc);
+                using (var db = new SolidBrush(Color.FromArgb(20, 255, 255, 255))) for (int x = 8; x < pnlHead.Width; x += 20) for (int y = 6; y < pnlHead.Height; y += 20) g.FillEllipse(db, x, y, 2, 2);
+                string title = isEdit ? "تعديل بيانات العميل" : "إضافة عميل جديد";
+                string sub = isEdit ? "عدّل البيانات ثم اضغط تحديث" : "أدخل بيانات العميل الجديد ثم اضغط حفظ";
+                using (var tf = new Font("Cairo", 17F, FontStyle.Bold)) using (var tb2 = new SolidBrush(Color.White)) { var tsz = g.MeasureString(title, tf); g.DrawString(title, tf, tb2, pnlHead.Width - tsz.Width - 60, 16); }
+                using (var sf2 = new Font("Cairo", 10F)) using (var sb2 = new SolidBrush(Color.FromArgb(200, 255, 255, 255))) { var ssz = g.MeasureString(sub, sf2); g.DrawString(sub, sf2, sb2, pnlHead.Width - ssz.Width - 60, 54); }
+            };
+            var btnClose = new Guna2Button { Size = new Size(30, 30), Text = "X", FillColor = Color.FromArgb(50, 255, 255, 255), ForeColor = Color.White, BorderRadius = 8, BorderThickness = 1, BorderColor = Color.FromArgb(70, 255, 255, 255), Font = new Font("Segoe UI", 11F, FontStyle.Bold), Anchor = AnchorStyles.Top | AnchorStyles.Left };
+            btnClose.HoverState.FillColor = Color.FromArgb(80, 255, 255, 255);
+            btnClose.Click += (s, e) => closePopup();
+            pnlHead.Controls.Add(btnClose); pnlHead.Layout += (s, e) => btnClose.Location = new Point(25, 15);
+
+            var body = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(24, 16, 24, 4), RightToLeft = RightToLeft.Yes };
+            Guna2TextBox MakeTxt(string ph) { var t = new Guna2TextBox { Height = 44, Dock = DockStyle.Top, BorderRadius = 12, FillColor = ColorTranslator.FromHtml("#F9FAFB"), BorderColor = ColorTranslator.FromHtml("#E5E7EB"), Font = new Font("Cairo", 11F), PlaceholderText = ph, PlaceholderForeColor = ColorTranslator.FromHtml("#C4C9D4"), ForeColor = ColorTranslator.FromHtml("#111827"), TextAlign = HorizontalAlignment.Right, RightToLeft = RightToLeft.No }; t.FocusedState.BorderColor = ColorTranslator.FromHtml("#4E73DF"); t.FocusedState.FillColor = Color.White; return t; }
+            Label MakeLbl(string text) => new Label { Text = text, Dock = DockStyle.Top, Height = 22, Font = new Font("Cairo", 10F, FontStyle.Bold), ForeColor = ColorTranslator.FromHtml("#374151"), TextAlign = ContentAlignment.BottomRight, BackColor = Color.Transparent, RightToLeft = RightToLeft.No };
+            Panel Sp(int h = 10) => new Panel { Dock = DockStyle.Top, Height = h, BackColor = Color.Transparent };
+
+            var fAddress = MakeTxt("مثال: سوهاج، اخميم"); var lblAddr = MakeLbl("العنوان");
+            var fPhone = MakeTxt("مثال: 01012345678"); var lblPhone2 = MakeLbl("رقم الهاتف *");
+            var fName = MakeTxt("مثال: أحمد محمد"); var lblName2 = MakeLbl("اسم العميل *");
+
+            body.Controls.Add(Sp(20)); body.Controls.Add(fAddress); body.Controls.Add(lblAddr);
+            body.Controls.Add(Sp()); body.Controls.Add(fPhone); body.Controls.Add(lblPhone2);
+            body.Controls.Add(Sp()); body.Controls.Add(fName); body.Controls.Add(lblName2);
+            if (isEdit) { fName.Text = editDto.Name; fPhone.Text = editDto.Phone; fAddress.Text = editDto.Address; }
+
+            var footer = new Panel { Dock = DockStyle.Bottom, Height = 76, BackColor = Color.White, Padding = new Padding(24, 12, 24, 20) };
+            var btnSave = new Guna2Button { Dock = DockStyle.Fill, Text = isEdit ? "تحديث العميل" : "حفظ العميل", BorderRadius = 13, FillColor = ColorTranslator.FromHtml("#4E73DF"), ForeColor = Color.White, Font = new Font("Cairo", 12F, FontStyle.Bold), Animated = true };
+            btnSave.HoverState.FillColor = ColorTranslator.FromHtml("#3B5DC9");
+            btnSave.ShadowDecoration.Enabled = true; btnSave.ShadowDecoration.Color = Color.FromArgb(45, 78, 115, 223); btnSave.ShadowDecoration.Depth = 10;
+            btnSave.Click += async (s, e) =>
+            {
+                fName.BorderColor = fPhone.BorderColor = ColorTranslator.FromHtml("#E5E7EB");
+                bool valid = true;
+                if (string.IsNullOrWhiteSpace(fName.Text)) { fName.BorderColor = ColorTranslator.FromHtml("#EF4444"); valid = false; }
+                if (string.IsNullOrWhiteSpace(fPhone.Text)) { fPhone.BorderColor = ColorTranslator.FromHtml("#EF4444"); valid = false; }
+                if (!valid) return;
+                btnSave.Enabled = false; btnSave.Text = "جارٍ الحفظ...";
+                try
+                {
+                    var dto = new CustomerDto { Name = fName.Text.Trim(), Phone = fPhone.Text.Trim(), Address = fAddress.Text.Trim() };
+                    await Task.Run(() => { if (!isEdit) _service.Insert(dto); else { dto.Id = editDto.Id; _service.Update(dto); } });
+                    _ = LoadCustomersAsync(); closePopup();
+                }
+                catch (Exception ex) { btnSave.Enabled = true; btnSave.Text = isEdit ? "تحديث العميل" : "حفظ العميل"; MessageBox.Show("خطأ: " + ex.Message); }
+            };
+            footer.Controls.Add(btnSave);
+            popup.Controls.Add(body); popup.Controls.Add(footer); popup.Controls.Add(pnlHead);
+            popupForm.Shown += (s, e) => fName.Focus();
+            popupForm.ShowDialog(this);
+        }
+
+        // ??????????????????????????????????????????????????????
+        //  HELPERS
+        // ??????????????????????????????????????????????????????
+        private GraphicsPath RoundPath(Rectangle r, int radius)
+        {
+            int d = radius * 2; var path = new GraphicsPath();
+            path.AddArc(r.Left, r.Top, d, d, 180, 90); path.AddArc(r.Right - d, r.Top, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); path.AddArc(r.Left, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure(); return path;
+        }
+
+        private void btnUpdate_Click(object sender, EventArgs e) { }
+        private void btnDelete_Click(object sender, EventArgs e) { }
+        private void btnClear_Click(object sender, EventArgs e) { }
+        private void dgvCustomers_SelectionChanged(object sender, EventArgs e) { }
+    }
+}

@@ -1,0 +1,37 @@
+﻿using System;
+using System.Linq;
+using System.Windows.Forms;
+using DistributionSystem.Business.Services;
+
+namespace DistributionSystem.UI.Forms
+{
+    public partial class WarehouseReportForm : Form
+    {
+        private readonly WarehouseService _service;
+
+        public WarehouseReportForm()
+        {
+            InitializeComponent();
+            _service = new WarehouseService();
+        }
+
+        private void WarehouseReportForm_Load(object sender, EventArgs e)
+        {
+            LoadReport();
+        }
+
+        private void LoadReport()
+        {
+            try
+            {
+                var balances = _service.GetAllBalances().ToList();
+                dgvReport.DataSource = balances;
+                if (dgvReport.Columns["ProductId"] != null) dgvReport.Columns["ProductId"].Visible = false;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to load report: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+    }
+}

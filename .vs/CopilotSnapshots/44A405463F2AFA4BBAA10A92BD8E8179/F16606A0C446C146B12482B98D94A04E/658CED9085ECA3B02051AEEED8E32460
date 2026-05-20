@@ -1,0 +1,198 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using DistributionSystem.Business.Dtos;
+using DistributionSystem.Data.Data;
+using DistributionSystem.Data.Entities;
+using DistributionSystem.Data.Interfaces;
+using DistributionSystem.Data.Repositories;
+using System.Data.SqlClient;
+
+namespace DistributionSystem.Business.Services
+{
+    public class ValidationException : Exception
+    {
+        public ValidationException(string message) : base(message) { }
+    }
+
+    public class DataAccessException : Exception
+    {
+        public DataAccessException(string message, Exception inner) : base(message, inner) { }
+    }
+
+    public class ProductService : BaseService
+    {
+        private readonly IProductRepository _productRepository;
+        private readonly IWarehouseTransactionRepository _warehouseRepository;
+        private readonly SqlConnectionFactory _connectionFactory;
+
+        public ProductService() : this(new ProductRepository(new SqlConnectionFactory()), new WarehouseTransactionRepository(new SqlConnectionFactory()), new SqlConnectionFactory())
+        {
+        }
+
+        // Constructor injection for DI
+        public ProductService(IProductRepository productRepository, IWarehouseTransactionRepository warehouseRepository, SqlConnectionFactory connectionFactory)
+        {
+            _productRepository = productRepository;
+            _warehouseRepository = warehouseRepository;
+            _connectionFactory = connectionFactory;
+        }
+
+        public IEnumerable<ProductDto> GetAll()
+        {
+            return Execute(() => _productRepository.GetAll().Select(MapToDto).ToList());
+        }
+
+        public ProductDto GetById(int id)
+        {
+            return Execute(() =>
+            {
+                var p = _productRepository.GetById(id);
+                if (p == null) return null;
+                return MapToDto(p);
+            });
+        }
+
+        // Create product with opening balance in a single transaction
+        public int CreateProductWithOpeningBalance(ProductDto dto, int initialQuantity)
+        {
+            return Execute(() =>
+            {
+                Validate(dto, initialQuantity);
+
+                using (var conn = _connectionFactory.CreateConnection())
+                {
+                    conn.Open();
+                    using (var tran = conn.BeginTransaction())
+                    {
+                        try
+                        {
+                            // Insert product using repository method that accepts connection+transaction
+                            var productEntity = MapToEntity(dto);
+                            var newProductId = _productRepository.Insert(productEntity, conn, tran);
+
+                            if (initialQuantity > 0)
+                            {
+                                var tx = new WarehouseTransaction
+                                {
+                                    ProductId = newProductId,
+                                    Quantity = initialQuantity,
+                                    TransactionType = "رصيد افتتاحي",
+                                    ReferenceId = null,
+                                    PurchasePrice = dto.PurchasePrice,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+
+                                _warehouseRepository.AddTransaction(tx, conn, tran);
+                            }
+
+                            tran.Commit();
+                            return newProductId;
+                        }
+                        catch (ValidationException)
+                        {
+                            try { tran.Rollback(); } catch { }
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log the exception (simulate logging)
+                            LogError(ex);
+
+                            try { tran.Rollback(); } catch { }
+                            // Wrap in a data access exception to avoid leaking SQL details to UI
+                            throw new DataAccessException("حصل خطأ أثناء حفظ المنتج. حاول مرة أخرى أو تواصل مع الدعم.", ex);
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update product
+        public bool Update(ProductDto dto)
+        {
+            return Execute(() =>
+            {
+                if (dto == null) throw new ValidationException("بيانات المنتج غير صالحة.");
+                if (dto.Id <= 0) throw new ValidationException("معرّف المنتج غير صالح.");
+
+                ValidateDto(dto);
+
+                try
+                {
+                    var entity = MapToEntity(dto);
+                    entity.Id = dto.Id;
+                    return _productRepository.Update(entity);
+                }
+                catch (Exception ex)
+                {
+                    LogError(ex);
+                    throw new DataAccessException("حدث خطأ أثناء تحديث المنتج.", ex);
+                }
+            });
+        }
+
+        // Delete product
+        public bool Delete(int id)
+        {
+            return Execute(() =>
+            {
+                if (id <= 0) throw new ValidationException("معرّف المنتج غير صالح.");
+                try
+                {
+                    return _productRepository.Delete(id);
+                }
+                catch (Exception ex)
+                {
+                    LogError(ex);
+                    throw new DataAccessException("حدث خطأ أثناء حذف المنتج.", ex);
+                }
+            });
+        }
+
+        private void Validate(ProductDto dto, int initialQuantity)
+        {
+            if (dto == null) throw new ValidationException("بيانات المنتج غير صالحة.");
+            if (string.IsNullOrWhiteSpace(dto.Name)) throw new ValidationException("الاسم مطلوب.");
+            if (dto.PurchasePrice <= 0) throw new ValidationException("سعر الشراء يجب أن يكون أكبر من صفر.");
+            if (dto.SalePrice <= 0) throw new ValidationException("سعر البيع يجب أن يكون أكبر من صفر.");
+            if (initialQuantity < 0) throw new ValidationException("الكمية المبدئية لا يمكن أن تكون سالبة.");
+        }
+
+        private void ValidateDto(ProductDto dto)
+        {
+            if (dto == null) throw new ValidationException("بيانات المنتج غير صالحة.");
+            if (string.IsNullOrWhiteSpace(dto.Name)) throw new ValidationException("الاسم مطلوب.");
+            if (dto.PurchasePrice <= 0) throw new ValidationException("سعر الشراء يجب أن يكون أكبر من صفر.");
+            if (dto.SalePrice <= 0) throw new ValidationException("سعر البيع يجب أن يكون أكبر من صفر.");
+        }
+
+        private void LogError(Exception ex)
+        {
+            // Simulate logging. Replace with real logging in production.
+            System.Diagnostics.Debug.WriteLine($"[ERROR] {DateTime.UtcNow:o} - {ex}");
+        }
+
+        private static ProductDto MapToDto(Product p)
+        {
+            return new ProductDto
+            {
+                Id = p.Id,
+                Name = p.Name,
+                PurchasePrice = p.PurchasePrice,
+                SalePrice = p.SalePrice,
+                CreatedAt = p.CreatedAt
+            };
+        }
+
+        private static Product MapToEntity(ProductDto dto)
+        {
+            return new Product
+            {
+                Name = dto.Name,
+                PurchasePrice = dto.PurchasePrice,
+                SalePrice = dto.SalePrice
+            };
+        }
+    }
+}

@@ -1,0 +1,137 @@
+﻿using System;
+using System.Linq;
+using System.Windows.Forms;
+using DistributionSystem.Business.Dtos;
+using DistributionSystem.Business.Services;
+
+namespace DistributionSystem.UI.Forms
+{
+    public partial class InboundForm : Form
+    {
+        private readonly WarehouseService _service;
+        private readonly ProductService _productService;
+        private readonly CustomerService _customerService;
+        private readonly InboundService _inboundService;
+
+        public InboundForm()
+        {
+            InitializeComponent();
+            _service = new WarehouseService();
+            _productService = new ProductService();
+            _customerService = new CustomerService();
+            _inboundService = new InboundService();
+        }
+
+        private void InboundForm_Load(object sender, EventArgs e)
+        {
+            LoadProducts();
+            LoadCustomers();
+        }
+
+        private void LoadProducts()
+        {
+            try
+            {
+                var products = _productService.GetAll().ToList();
+                cboProduct.DisplayMember = "Name";
+                cboProduct.ValueMember = "Id";
+                cboProduct.DataSource = products;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"فشل تحميل المنتجات: {GetInnermostMessage(ex)}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void LoadCustomers()
+        {
+            try
+            {
+                var customers = _customerService.GetAll().ToList();
+                cboCustomer.DisplayMember = "Name";
+                cboCustomer.ValueMember = "Id";
+                cboCustomer.DataSource = customers;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"فشل تحميل العملاء: {GetInnermostMessage(ex)}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnSave_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (cboCustomer.SelectedValue == null)
+                {
+                    MessageBox.Show("Customer must be selected.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                if (cboProduct.SelectedValue == null)
+                {
+                    MessageBox.Show("Product must be selected.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                int customerId;
+                int productId;
+                try
+                {
+                    customerId = Convert.ToInt32(cboCustomer.SelectedValue);
+                    productId = Convert.ToInt32(cboProduct.SelectedValue);
+                }
+                catch (Exception)
+                {
+                    MessageBox.Show("Selected values are invalid.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                var purchasePrice = decimal.TryParse(txtPurchasePrice.Text, out var pp) ? pp : 0;
+                var qty = int.TryParse(txtQuantity.Text, out var q) ? q : 0;
+                if (qty <= 0)
+                {
+                    MessageBox.Show("Quantity must be greater than zero.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                if (purchasePrice <= 0)
+                {
+                    MessageBox.Show("Purchase price must be greater than zero.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var dto = new InboundOrderDto
+                {
+                    CustomerId = customerId
+                };
+                dto.Items.Add(new InboundOrderItemDto { ProductId = productId, Quantity = qty, PurchasePrice = purchasePrice });
+
+                try
+                {
+                    var newId = _inboundService.SaveInboundOrder(dto);
+                    MessageBox.Show("Inbound saved successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    txtQuantity.Clear();
+                    txtPurchasePrice.Clear();
+                }
+                catch (Exception ex)
+                {
+                    // Show inner-most message from service to help debugging
+                    MessageBox.Show($"Error saving inbound: {GetInnermostMessage(ex)}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An unexpected error occurred: {GetInnermostMessage(ex)}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private static string GetInnermostMessage(Exception ex)
+        {
+            if (ex == null) return string.Empty;
+            var e = ex;
+            while (e.InnerException != null) e = e.InnerException;
+            return e.Message;
+        }
+    }
+}

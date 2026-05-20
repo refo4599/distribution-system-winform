@@ -1,0 +1,328 @@
+﻿using System;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Windows.Forms;
+using Guna.UI2.WinForms;
+
+namespace DistributionSystem.UI.Forms
+{
+    public partial class MainLayoutForm : Form
+    {
+        // NEW controls (declared as private fields)
+        private Panel headerPanel;
+        private Panel sidePanel;
+        private Panel panelContent;
+        private Label lblTitle;
+        private Label lblUser;
+        private Label lblDateTime;
+        private Guna2Button btnDashboard;
+        private Guna2Button btnProducts;
+        private Guna2Button btnCustomers;
+        private Guna2Button btnInbound;
+        private Guna2Button btnWarehouse;
+        private Guna2Button btnCars;
+        private Guna2Button btnEmployees;
+        private Guna2Button btnLogout;
+
+        private Timer _clockTimer;
+
+        public string LoggedInUser { get; set; } = "admin";
+
+        public MainLayoutForm()
+        {
+            InitializeComponent();
+            InitializeRuntime();
+        }
+
+        private void InitializeComponent()
+        {
+            // Form
+            this.Text = "نظام إدارة التوزيع والمخازن";
+            this.ClientSize = new Size(1024, 768);
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.Padding = new Padding(0);
+            this.Font = new Font("Cairo", 10F);
+            this.BackColor = ColorTranslator.FromHtml("#F0F2F5");
+            this.RightToLeft = RightToLeft.Yes;
+            this.RightToLeftLayout = true;
+
+            // Header panel (painted gradient and centered title)
+            headerPanel = new Panel
+            {
+                Height = 72,
+                Dock = DockStyle.Top,
+                BackColor = Color.Transparent
+            };
+            headerPanel.Paint += HeaderPanel_Paint;
+            headerPanel.Resize += (s, e) => headerPanel.Invalidate();
+
+            // DateTime and User labels (placed on right side)
+            lblUser = new Label
+            {
+                AutoSize = false,
+                Size = new Size(300, 24),
+                Font = new Font("Cairo", 10F, FontStyle.Regular),
+                ForeColor = Color.White,
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.BottomLeft
+            };
+
+            lblDateTime = new Label
+            {
+                AutoSize = false,
+                Size = new Size(300, 20),
+                Font = new Font("Cairo", 9F, FontStyle.Regular),
+                ForeColor = Color.White,
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.TopLeft
+            };
+
+            // place labels manually inside header
+            headerPanel.Controls.Add(lblDateTime);
+            headerPanel.Controls.Add(lblUser);
+            headerPanel.Resize += (s, e) => PositionHeaderInfo();
+
+            // Side panel (RIGHT)
+            sidePanel = new Panel
+            {
+                Width = 180,
+                Dock = DockStyle.Left,
+                BackColor = ColorTranslator.FromHtml("#1A2035")
+            };
+
+            // Content panel
+            panelContent = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = ColorTranslator.FromHtml("#F3F4F6")
+            };
+
+            // Buttons (Guna2Button for styling)
+            btnDashboard = MakeSidebarButton("اللوحة", 10);
+            btnProducts = MakeSidebarButton("المنتجات", 60);
+            btnCustomers = MakeSidebarButton("العملاء", 110);
+            btnInbound = MakeSidebarButton("وارد", 160);
+            btnWarehouse = MakeSidebarButton("المخزن", 210);
+            btnCars = MakeSidebarButton("السيارات", 260);
+            btnEmployees = MakeSidebarButton("الموظفون", 310);
+            btnLogout = MakeSidebarButton("تسجيل الخروج", 360);
+
+            // Assign click handlers
+            btnDashboard.Click += (s, e) => btnDashboard_Click(s, e);
+            btnProducts.Click += (s, e) => btnProducts_Click(s, e);
+            btnCustomers.Click += (s, e) => btnCustomers_Click(s, e);
+            btnInbound.Click += (s, e) => btnInbound_Click(s, e);
+            btnWarehouse.Click += (s, e) => btnWarehouse_Click(s, e);
+            btnCars.Click += (s, e) => btnCars_Click(s, e);
+            btnEmployees.Click += (s, e) => btnEmployees_Click(s, e);
+            btnLogout.Click += (s, e) => btnLogout_Click(s, e);
+
+            // Add buttons to sidePanel
+            sidePanel.Controls.AddRange(new Control[] {
+                btnDashboard, btnProducts, btnCustomers, btnInbound,
+                btnWarehouse, btnCars, btnEmployees, btnLogout
+            });
+
+            // Add controls to form
+            this.Controls.Add(panelContent);
+            this.Controls.Add(sidePanel);
+            this.Controls.Add(headerPanel);
+
+            // Initial positions after layout
+            this.Load += (s, e) =>
+            {
+                PositionHeaderInfo();
+                SetActiveButton(btnDashboard);
+            };
+        }
+
+        private Guna2Button MakeSidebarButton(string text, int top)
+        {
+            var btn = new Guna2Button
+            {
+                Text = text,
+                Size = new Size(sidePanel.Width - 20, 44),
+                Location = new Point(10, top),
+                FillColor = ColorTranslator.FromHtml("#111827"),
+                ForeColor = Color.White,
+                BorderRadius = 10,
+                Font = new Font("Cairo", 11F, FontStyle.Bold),
+                ShadowDecoration = { Enabled = false },
+                Cursor = Cursors.Hand,
+                TextAlign = HorizontalAlignment.Center
+            };
+            btn.HoverState.FillColor = ColorTranslator.FromHtml("#252D45");
+            return btn;
+        }
+
+        private void PositionHeaderInfo()
+        {
+            try
+            {
+                // Place user and datetime on the LEFT side with padding
+                int paddingLeft = 20; // spacing from left edge
+                lblUser.Location = new Point(paddingLeft, 18);
+                lblDateTime.Location = new Point(paddingLeft, 40);
+            }
+            catch { }
+        }
+
+        private void HeaderPanel_Paint(object sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var rc = new Rectangle(0, 0, headerPanel.Width, headerPanel.Height);
+
+            using (var br = new LinearGradientBrush(rc,
+                ColorTranslator.FromHtml("#1a2f5e"),
+                ColorTranslator.FromHtml("#1565c0"),
+                LinearGradientMode.Horizontal))
+            using (var path = RoundPath(rc, 0))
+            {
+                g.FillRectangle(br, rc);
+            }
+
+            // Dot overlay
+            using (var dot = new SolidBrush(Color.FromArgb(18, 255, 255, 255)))
+                for (int x = 10; x < headerPanel.Width; x += 22)
+                    for (int y = 8; y < headerPanel.Height; y += 22)
+                        g.FillEllipse(dot, x, y, 2, 2);
+
+            // Centered title via manual measurement (RTL-safe)
+            string title = "نظام إدارة التوزيع والمخازن";
+            using (var f = new Font("Cairo", 20F, FontStyle.Bold))
+            using (var brush = new SolidBrush(Color.White))
+            {
+                var sz = g.MeasureString(title, f);
+                float x = (headerPanel.Width - sz.Width) / 2f;
+                float y = (headerPanel.Height - sz.Height) / 2f - 4;
+                g.DrawString(title, f, brush, x, y);
+            }
+        }
+
+        private GraphicsPath RoundPath(Rectangle r, int radius)
+        {
+            var path = new GraphicsPath();
+            if (radius <= 0) { path.AddRectangle(r); return path; }
+            int d = radius * 2;
+            path.AddArc(r.Left, r.Top, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Top, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.Left, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        private void InitializeRuntime()
+        {
+            // RTL already set in InitializeComponent
+            lblUser.Text = $"المستخدم: {LoggedInUser}";
+
+            _clockTimer = new Timer { Interval = 1000 };
+            _clockTimer.Tick += (s, e) => lblDateTime.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            _clockTimer.Start();
+
+            // Default: load dashboard
+            LoadChildForm(new DashboardForm());
+        }
+
+        public void LoadChildForm(Form child)
+        {
+            try
+            {
+                // Clear existing
+                if (panelContent.Controls.Count > 0)
+                {
+                    var existingControl = panelContent.Controls[0];
+                    panelContent.Controls.Clear();
+                    existingControl.Dispose();
+                }
+
+                child.TopLevel = false;
+                child.FormBorderStyle = FormBorderStyle.None;
+                child.Dock = DockStyle.Fill;
+                panelContent.Controls.Add(child);
+                child.Show();
+
+                // Fade in (keep existing helper usage)
+                AnimationHelper.FadeIn(child, 300);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"حدث خطأ أثناء تحميل الشاشة: {ex.Message}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // Button click handlers call existing logical methods
+        private void btnDashboard_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnDashboard);
+            LoadChildForm(new DashboardForm());
+        }
+
+        private void btnProducts_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnProducts);
+            LoadChildForm(new ProductForm());
+        }
+
+        private void btnCustomers_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnCustomers);
+            LoadChildForm(new CustomerForm());
+        }
+
+        private void btnInbound_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnInbound);
+            LoadChildForm(new InboundForm());
+        }
+
+        private void btnWarehouse_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnWarehouse);
+            LoadChildForm(new WarehouseReportForm());
+        }
+
+        private void btnCars_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnCars);
+            // placeholder
+            LoadChildForm(new ProductForm());
+        }
+
+        private void btnEmployees_Click(object sender, EventArgs e)
+        {
+            SetActiveButton(btnEmployees);
+            LoadChildForm(new ProductForm());
+        }
+
+        private void btnLogout_Click(object sender, EventArgs e)
+        {
+            var confirm = MessageBox.Show("هل تريد تسجيل الخروج؟", "تأكيد", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm == DialogResult.Yes)
+            {
+                this.Close();
+            }
+        }
+
+        private void SetActiveButton(Guna2Button active)
+        {
+            var buttons = new[] { btnDashboard, btnProducts, btnCustomers, btnInbound, btnWarehouse, btnCars, btnEmployees, btnLogout };
+            foreach (var b in buttons)
+            {
+                if (b == null) continue;
+                if (b == active)
+                {
+                    b.FillColor = ColorTranslator.FromHtml("#4E73DF");
+                    b.ForeColor = Color.White;
+                }
+                else
+                {
+                    b.FillColor = ColorTranslator.FromHtml("#111827");
+                    b.ForeColor = Color.White;
+                }
+            }
+        }
+    }
+}

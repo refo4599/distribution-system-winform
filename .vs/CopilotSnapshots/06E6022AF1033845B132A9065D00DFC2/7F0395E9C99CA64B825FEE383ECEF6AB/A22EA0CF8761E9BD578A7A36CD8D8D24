@@ -1,0 +1,68 @@
+﻿using System;
+using System.Linq;
+using System.Windows.Forms;
+using DistributionSystem.Business.Dtos;
+using DistributionSystem.Business.Services;
+
+namespace DistributionSystem.UI.Forms
+{
+    public partial class InboundForm : Form
+    {
+        private readonly WarehouseService _service;
+        private readonly ProductService _productService;
+
+        public InboundForm()
+        {
+            InitializeComponent();
+            _service = new WarehouseService();
+            _productService = new ProductService();
+        }
+
+        private void InboundForm_Load(object sender, EventArgs e)
+        {
+            LoadProducts();
+        }
+
+        private void LoadProducts()
+        {
+            try
+            {
+                var products = _productService.GetAll().ToList();
+                cboProduct.DisplayMember = "Name";
+                cboProduct.ValueMember = "Id";
+                cboProduct.DataSource = products;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to load products: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnSave_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (!(cboProduct.SelectedItem is dynamic selected))
+                {
+                    MessageBox.Show("Select a product.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var dto = new WarehouseTransactionDto
+                {
+                    ProductId = (int)cboProduct.SelectedValue,
+                    Quantity = int.TryParse(txtQuantity.Text, out var q) ? q : 0,
+                    TransactionType = "Inbound"
+                };
+
+                _service.AddTransaction(dto);
+                MessageBox.Show("Inbound recorded.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                txtQuantity.Clear();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save inbound: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+    }
+}

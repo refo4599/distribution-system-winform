@@ -1,0 +1,30 @@
+﻿using DistributionSystem.UI.Forms;
+using DistributionSystem.UI.Services;
+using System;
+using System.Windows.Forms;
+
+namespace DistributionSystem.UI
+{
+    internal static class Program
+    {
+        [STAThread]
+        static void Main()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+
+            try
+            {
+                // Perform startup validation; if validation fails, show friendly message and exit
+                StartupValidator.ValidateOrThrow();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Startup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            Application.Run(new LoginForm());
+        }
+    }
+}

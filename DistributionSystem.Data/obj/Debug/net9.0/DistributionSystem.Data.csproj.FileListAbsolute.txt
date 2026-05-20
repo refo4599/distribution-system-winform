@@ -1,0 +1,12 @@
+D:\DistributionSystem.UI\DistributionSystem.Data\obj\Debug\net9.0\DistributionSystem.Data.GeneratedMSBuildEditorConfig.editorconfig
+D:\DistributionSystem.UI\DistributionSystem.Data\obj\Debug\net9.0\DistributionSystem.Data.AssemblyInfoInputs.cache
+D:\DistributionSystem.UI\DistributionSystem.Data\obj\Debug\net9.0\DistributionSystem.Data.AssemblyInfo.cs
+D:\DistributionSystem.UI\DistributionSystem.Data\obj\Debug\net9.0\DistributionSystem.Data.csproj.CoreCompileInputs.cache
+D:\DistributionSystem.UI\DistributionSystem.Data\bin\Debug\net9.0\DistributionSystem.Data.deps.json
+D:\DistributionSystem.UI\DistributionSystem.Data\bin\Debug\net9.0\DistributionSystem.Data.dll
+D:\DistributionSystem.UI\DistributionSystem.Data\bin\Debug\net9.0\DistributionSystem.Data.pdb
+D:\DistributionSystem.UI\DistributionSystem.Data\obj\Debug\net9.0\DistributionSystem.Data.csproj.AssemblyReference.cache
+D:\DistributionSystem.UI\DistributionSystem.Data\obj\Debug\net9.0\DistributionSystem.Data.dll
+D:\DistributionSystem.UI\DistributionSystem.Data\obj\Debug\net9.0\refint\DistributionSystem.Data.dll
+D:\DistributionSystem.UI\DistributionSystem.Data\obj\Debug\net9.0\DistributionSystem.Data.pdb
+D:\DistributionSystem.UI\DistributionSystem.Data\obj\Debug\net9.0\ref\DistributionSystem.Data.dll

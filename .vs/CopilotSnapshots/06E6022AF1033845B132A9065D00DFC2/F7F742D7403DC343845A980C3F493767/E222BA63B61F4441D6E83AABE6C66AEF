@@ -1,0 +1,40 @@
+﻿using System;
+using System.Configuration;
+using System.Data.SqlClient;
+
+namespace DistributionSystem.Data.Data
+{
+    public class SqlConnectionFactory
+    {
+        private readonly string _connectionString;
+
+        public SqlConnectionFactory()
+        {
+            try
+            {
+                _connectionString = ConfigurationManager.ConnectionStrings["DistributionDb"]?.ConnectionString;
+                if (string.IsNullOrWhiteSpace(_connectionString))
+                {
+                    throw new InvalidOperationException("Connection string 'DistributionDb' is not configured in App.config.");
+                }
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+
+        public SqlConnection CreateConnection()
+        {
+            try
+            {
+                var connection = new SqlConnection(_connectionString);
+                return connection;
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+    }
+}

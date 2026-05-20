@@ -1,0 +1,171 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Data;
+using System.Data.SqlClient;
+using DistributionSystem.Business.Dtos;
+using DistributionSystem.Data.Data;
+using DistributionSystem.Data.Entities;
+using DistributionSystem.Data.Repositories;
+
+namespace DistributionSystem.Business.Services
+{
+    public class WarehouseService : BaseService
+    {
+        private readonly WarehouseTransactionRepository _repository;
+        private readonly ProductRepository _productRepository;
+
+        private static readonly string[] ValidTypes = new[] { "Inbound", "CarLoad", "Return" };
+
+        public WarehouseService()
+        {
+            var factory = new SqlConnectionFactory();
+            _repository = new WarehouseTransactionRepository(factory);
+            _productRepository = new ProductRepository(factory);
+        }
+
+        public int AddTransaction(WarehouseTransactionDto dto)
+        {
+            return Execute(() =>
+            {
+                Validate(dto);
+                var entity = new WarehouseTransaction
+                {
+                    ProductId = dto.ProductId,
+                    Quantity = dto.Quantity,
+                    TransactionType = dto.TransactionType,
+                    ReferenceId = dto.ReferenceId,
+                    CreatedAt = DateTime.UtcNow
+                };
+                return _repository.AddTransaction(entity);
+            });
+        }
+
+        public int GetProductBalance(int productId)
+        {
+            return Execute(() => _repository.GetProductBalance(productId));
+        }
+
+        public decimal? GetProductAverageCost(int productId)
+        {
+            return Execute(() => _repository.GetProductAverageCost(productId));
+        }
+
+        public decimal GetTotalInventoryValue()
+        {
+            return Execute(() => _repository.GetTotalInventoryValue());
+        }
+
+        public IEnumerable<WarehouseBalanceDto> GetAllBalances()
+        {
+            return Execute(() =>
+            {
+                var balances = _repository.GetAllBalances().ToList();
+                var products = _productRepository.GetAll().ToDictionary(p => p.Id, p => p.Name);
+                return balances.Select(b => new WarehouseBalanceDto { ProductId = b.Item1, ProductName = products.ContainsKey(b.Item1) ? products[b.Item1] : string.Empty, Balance = b.Item2 }).ToList();
+            });
+        }
+
+        // Process an outbound (e.g., CarLoad) safely: calculates weighted average and inserts transaction inside a SQL transaction
+        public int ProcessOutbound(int productId, int quantity, string transactionType = "CarLoad", int? referenceId = null)
+        {
+            return Execute(() =>
+            {
+                if (productId <= 0) throw new ArgumentException("Invalid productId.", nameof(productId));
+                if (quantity <= 0) throw new ArgumentException("Quantity must be greater than zero.", nameof(quantity));
+                if (string.IsNullOrWhiteSpace(transactionType) || !ValidTypes.Contains(transactionType)) throw new ArgumentException("Invalid transaction type.", nameof(transactionType));
+
+                var factory = new SqlConnectionFactory();
+                using (var conn = factory.CreateConnection())
+                {
+                    conn.Open();
+                    using (var tran = conn.BeginTransaction(IsolationLevel.Serializable))
+                    {
+                        try
+                        {
+                            var id = _repository.CreateOutboundTransaction(productId, quantity, transactionType, referenceId, conn, tran);
+                            tran.Commit();
+                            return id;
+                        }
+                        catch (Exception ex)
+                        {
+                            try { tran.Rollback(); } catch { }
+                            LogError(ex);
+                            throw;
+                        }
+                    }
+                }
+            });
+        }
+
+        // Process a return for a previously created outbound transaction (use original unit cost)
+        public int ProcessReturnFromOutbound(int originalTransactionId, int quantity, string transactionType = "Return", int? referenceId = null)
+        {
+            return Execute(() =>
+            {
+                if (originalTransactionId <= 0) throw new ArgumentException("Invalid original transaction id.", nameof(originalTransactionId));
+                if (quantity <= 0) throw new ArgumentException("Quantity must be greater than zero.", nameof(quantity));
+
+                // Get unit cost used by original outbound transaction
+                var unitCost = _repository.GetTransactionUnitCost(originalTransactionId);
+                if (!unitCost.HasValue)
+                    throw new InvalidOperationException("Original transaction does not have a recorded unit cost. Cannot process return.");
+
+                var factory = new SqlConnectionFactory();
+                using (var conn = factory.CreateConnection())
+                {
+                    conn.Open();
+                    using (var tran = conn.BeginTransaction())
+                    {
+                        try
+                        {
+                            // Insert inbound transaction (positive quantity) with same unit cost
+                            var tx = new WarehouseTransaction
+                            {
+                                ProductId = GetProductIdForTransaction(originalTransactionId),
+                                Quantity = quantity,
+                                TransactionType = transactionType,
+                                ReferenceId = referenceId,
+                                PurchasePrice = unitCost,
+                                CreatedAt = DateTime.UtcNow
+                            };
+
+                            var id = _repository.AddTransaction(tx, conn, tran);
+                            tran.Commit();
+                            return id;
+                        }
+                        catch (Exception ex)
+                        {
+                            try { tran.Rollback(); } catch { }
+                            LogError(ex);
+                            throw;
+                        }
+                    }
+                }
+            });
+        }
+
+        private int GetProductIdForTransaction(int transactionId)
+        {
+            // Helper: read product id for a given transaction - use repository direct SQL
+            // We purposefully open a short-lived connection as it's a simple read
+            using (var conn = new SqlConnection((new SqlConnectionFactory()).ConnectionString))
+            using (var cmd = new SqlCommand("SELECT ProductId FROM dbo.WarehouseTransactions WHERE Id = @Id", conn))
+            {
+                cmd.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = transactionId });
+                conn.Open();
+                var res = cmd.ExecuteScalar();
+                if (res == null || res == DBNull.Value) throw new ArgumentException("Transaction not found.", nameof(transactionId));
+                return Convert.ToInt32(res);
+            }
+        }
+
+        private static void Validate(WarehouseTransactionDto dto)
+        {
+            if (dto == null) throw new ArgumentNullException(nameof(dto));
+            if (dto.ProductId <= 0) throw new ArgumentException("Invalid product.");
+            if (dto.Quantity <= 0) throw new ArgumentException("Quantity must be greater than zero.");
+            if (string.IsNullOrWhiteSpace(dto.TransactionType) || !ValidTypes.Contains(dto.TransactionType)) throw new ArgumentException("Invalid transaction type.");
+        }
+    }
+}

@@ -1,0 +1,25 @@
+﻿using System;
+
+namespace DistributionSystem.Data.Entities
+{
+    public class WarehouseTransaction
+    {
+        public int Id { get; set; }
+        public int ProductId { get; set; }
+        public int Quantity { get; set; }
+        public string TransactionType { get; set; } = string.Empty; // Inbound, CarLoad, Return, رصيد افتتاحي, وارد
+        public int? ReferenceId { get; set; }
+
+        // Existing column in DB is named PurchasePrice. Keep it for compatibility
+        public decimal? PurchasePrice { get; set; }
+
+        // New convenience property: UnitCost (maps to PurchasePrice). Use this in business logic.
+        public decimal? UnitCost
+        {
+            get => PurchasePrice;
+            set => PurchasePrice = value;
+        }
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    }
+}

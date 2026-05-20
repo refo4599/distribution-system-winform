@@ -1,0 +1,161 @@
+﻿namespace DistributionSystem.UI.Forms
+{
+    partial class MainLayoutForm
+    {
+        private System.ComponentModel.IContainer components = null;
+        private System.Windows.Forms.Panel headerPanel;
+        private System.Windows.Forms.Panel sidePanel;
+        private System.Windows.Forms.Panel panelContent;
+        private System.Windows.Forms.Button btnDashboard;
+        private System.Windows.Forms.Button btnProducts;
+        private System.Windows.Forms.Button btnCustomers;
+        private System.Windows.Forms.Button btnInbound;
+        private System.Windows.Forms.Button btnWarehouse;
+        private System.Windows.Forms.Button btnCars;
+        private System.Windows.Forms.Button btnEmployees;
+        private System.Windows.Forms.Button btnLogout;
+        private System.Windows.Forms.Label lblTitle;
+        private System.Windows.Forms.Label lblUser;
+        private System.Windows.Forms.Label lblDateTime;
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        private void InitializeComponent()
+        {
+            this.components = new System.ComponentModel.Container();
+            this.headerPanel = new System.Windows.Forms.Panel();
+            this.lblDateTime = new System.Windows.Forms.Label();
+            this.lblUser = new System.Windows.Forms.Label();
+            this.lblTitle = new System.Windows.Forms.Label();
+            this.sidePanel = new System.Windows.Forms.Panel();
+            this.btnLogout = new System.Windows.Forms.Button();
+            this.btnEmployees = new System.Windows.Forms.Button();
+            this.btnCars = new System.Windows.Forms.Button();
+            this.btnWarehouse = new System.Windows.Forms.Button();
+            this.btnInbound = new System.Windows.Forms.Button();
+            this.btnCustomers = new System.Windows.Forms.Button();
+            this.btnProducts = new System.Windows.Forms.Button();
+            this.btnDashboard = new System.Windows.Forms.Button();
+            this.panelContent = new System.Windows.Forms.Panel();
+            this.SuspendLayout();
+            // 
+            // headerPanel
+            // 
+            this.headerPanel.Dock = System.Windows.Forms.DockStyle.Top;
+            this.headerPanel.BackColor = System.Drawing.ColorTranslator.FromHtml("#1F2937");
+            this.headerPanel.Height = 60;
+            this.headerPanel.Controls.Add(this.lblDateTime);
+            this.headerPanel.Controls.Add(this.lblUser);
+            this.headerPanel.Controls.Add(this.lblTitle);
+            // 
+            // lblTitle
+            // 
+            this.lblTitle.AutoSize = true;
+            this.lblTitle.Font = new System.Drawing.Font("Segoe UI", 14F, System.Drawing.FontStyle.Bold);
+            this.lblTitle.ForeColor = System.Drawing.Color.White;
+            this.lblTitle.Location = new System.Drawing.Point(400, 15);
+            this.lblTitle.Text = "نظام إدارة التوزيع والمخازن";
+            // 
+            // lblUser
+            // 
+            this.lblUser.AutoSize = true;
+            this.lblUser.ForeColor = System.Drawing.Color.White;
+            this.lblUser.Location = new System.Drawing.Point(20, 15);
+            this.lblUser.Text = "المستخدم: admin";
+            // 
+            // lblDateTime
+            // 
+            this.lblDateTime.AutoSize = true;
+            this.lblDateTime.ForeColor = System.Drawing.Color.White;
+            this.lblDateTime.Location = new System.Drawing.Point(20, 35);
+            this.lblDateTime.Text = "";
+            // 
+            // sidePanel
+            // 
+            this.sidePanel.Dock = System.Windows.Forms.DockStyle.Right;
+            this.sidePanel.Width = 160;
+            this.sidePanel.BackColor = System.Drawing.ColorTranslator.FromHtml("#111827");
+            // 
+            // btnDashboard
+            // 
+            ConfigureButton(ref this.btnDashboard, "الرئيسية", 0);
+            this.btnDashboard.Click += new System.EventHandler(this.btnDashboard_Click);
+            // 
+            // btnProducts
+            // 
+            ConfigureButton(ref this.btnProducts, "المنتجات", 1);
+            this.btnProducts.Click += new System.EventHandler(this.btnProducts_Click);
+            // 
+            // btnCustomers
+            // 
+            ConfigureButton(ref this.btnCustomers, "العملاء", 2);
+            this.btnCustomers.Click += new System.EventHandler(this.btnCustomers_Click);
+            // 
+            // btnInbound
+            // 
+            ConfigureButton(ref this.btnInbound, "الوارد", 3);
+            this.btnInbound.Click += new System.EventHandler(this.btnInbound_Click);
+            // 
+            // btnWarehouse
+            // 
+            ConfigureButton(ref this.btnWarehouse, "المخزن", 4);
+            this.btnWarehouse.Click += new System.EventHandler(this.btnWarehouse_Click);
+            // 
+            // btnCars
+            // 
+            ConfigureButton(ref this.btnCars, "السيارات", 5);
+            this.btnCars.Click += new System.EventHandler(this.btnCars_Click);
+            // 
+            // btnEmployees
+            // 
+            ConfigureButton(ref this.btnEmployees, "الموظفين", 6);
+            this.btnEmployees.Click += new System.EventHandler(this.btnEmployees_Click);
+            // 
+            // btnLogout
+            // 
+            ConfigureButton(ref this.btnLogout, "تسجيل الخروج", 7);
+            this.btnLogout.Click += new System.EventHandler(this.btnLogout_Click);
+            // 
+            // panelContent
+            // 
+            this.panelContent.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.panelContent.BackColor = System.Drawing.ColorTranslator.FromHtml("#F3F4F6");
+
+            // 
+            // MainLayoutForm
+            // 
+            this.ClientSize = new System.Drawing.Size(1024, 768);
+            this.Controls.Add(this.panelContent);
+            this.Controls.Add(this.sidePanel);
+            this.Controls.Add(this.headerPanel);
+            this.Text = "نظام إدارة التوزيع والمخازن";
+            this.ResumeLayout(false);
+        }
+
+        private void ConfigureButton(ref System.Windows.Forms.Button btn, string text, int index)
+        {
+            btn = new System.Windows.Forms.Button();
+            btn.Text = text;
+            btn.Size = new System.Drawing.Size(140, 40);
+            btn.Margin = new System.Windows.Forms.Padding(10, 10, 10, 0);
+            btn.BackColor = System.Drawing.ColorTranslator.FromHtml("#3B82F6");
+            btn.ForeColor = System.Drawing.Color.White;
+            btn.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            btn.FlatAppearance.BorderSize = 0;
+            btn.Cursor = System.Windows.Forms.Cursors.Hand;
+
+            // Position vertically
+            btn.Location = new System.Drawing.Point(10, 10 + index * 50);
+
+            // Add to side panel
+            this.sidePanel.Controls.Add(btn);
+        }
+    }
+}

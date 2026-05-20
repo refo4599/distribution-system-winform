@@ -1,0 +1,1116 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Globalization;
+using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using Guna.UI2.WinForms;
+using DistributionSystem.Business.Dtos;
+using DistributionSystem.Business.Services;
+
+namespace DistributionSystem.UI.Forms
+{
+    public class ProductForm : Form
+    {
+        // ── Services ──────────────────────────────────────────
+        private readonly ProductService _service = new ProductService();
+        private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+        private int _selectedProductId = 0;
+
+        // ── Controls ──────────────────────────────────────────
+        private Guna2TextBox txtName, txtPurchasePrice, txtSalePrice, txtSearch;
+        private Guna2Button btnAdd, btnEdit, btnDelete;
+        private Guna2DataGridView dgvProducts;
+        private Label lblCountBadge;
+        private System.Threading.Timer _searchTimer;
+
+        // ── Constructor ───────────────────────────────────────
+        public ProductForm()
+        {
+            Text = "إدارة المنتجات";
+            RightToLeft = RightToLeft.Yes;
+            RightToLeftLayout = true;
+            BackColor = ColorTranslator.FromHtml("#F0F2F5");
+            MinimumSize = new Size(1000, 700);
+            Padding = new Padding(20);
+
+            txtName = new Guna2TextBox { Visible = false };
+            txtPurchasePrice = new Guna2TextBox { Visible = false };
+            txtSalePrice = new Guna2TextBox { Visible = false };
+            btnEdit = new Guna2Button { Visible = false };
+            btnDelete = new Guna2Button { Visible = false };
+
+            BuildLayout();
+            Load += (s, e) => LoadProducts();
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  LAYOUT
+        // ══════════════════════════════════════════════════════
+        private void BuildLayout()
+        {
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                BackColor = Color.Transparent,
+                Padding = new Padding(0)
+            };
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 88F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            root.Controls.Add(BuildPageHeader(), 0, 0);
+            root.Controls.Add(new Panel { Dock = DockStyle.Fill, Height = 0, Visible = false }, 0, 1);
+            root.Controls.Add(BuildTableCard(), 0, 2);
+
+            Controls.Add(root);
+        }
+
+        // ── Page header (gradient banner) ─────────────────────
+        private Panel BuildPageHeader()
+        {
+            var pnl = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Height = 88,
+                Padding = new Padding(0, 0, 0, 12),
+                BackColor = Color.Transparent
+            };
+
+            var banner = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
+
+            banner.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                var rc = new Rectangle(0, 0, banner.Width, banner.Height);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+
+                using (var br = new LinearGradientBrush(rc,
+                    ColorTranslator.FromHtml("#1a2f5e"),
+                    ColorTranslator.FromHtml("#1565c0"),
+                    LinearGradientMode.Horizontal))
+                using (var path = RoundPath(rc, 16))
+                    g.FillPath(br, path);
+
+                using (var dot = new SolidBrush(Color.FromArgb(18, 255, 255, 255)))
+                    for (int x = 10; x < banner.Width; x += 22)
+                        for (int y = 8; y < banner.Height; y += 22)
+                            g.FillEllipse(dot, x, y, 2, 2);
+
+                using (var cb = new SolidBrush(Color.FromArgb(14, 255, 255, 255)))
+                {
+                    g.FillEllipse(cb, banner.Width - 130, -50, 220, 220);
+                    g.FillEllipse(cb, banner.Width - 30, 20, 160, 160);
+                }
+
+                var shadowRect = new Rectangle(0, banner.Height - 6, banner.Width, 6);
+                using (var sb = new LinearGradientBrush(shadowRect,
+                    Color.FromArgb(40, 0, 0, 0), Color.Transparent,
+                    LinearGradientMode.Vertical))
+                    g.FillRectangle(sb, shadowRect);
+            };
+
+            var pnlTitle = new Panel
+            {
+                Dock = DockStyle.Right,
+                Width = 340,
+                BackColor = Color.Transparent,
+                Padding = new Padding(0, 0, 20, 0)
+            };
+
+            var lblMain = new Label
+            {
+                Text = "إدارة المنتجات",
+                Font = new Font("Cairo", 24F, FontStyle.Bold),
+                ForeColor = Color.White,
+                Dock = DockStyle.Top,
+                Height = 46,
+                TextAlign = ContentAlignment.BottomRight,
+                BackColor = Color.Transparent
+            };
+
+            var pnlAccent = new Panel { Dock = DockStyle.Top, Height = 20, BackColor = Color.Transparent };
+            pnlAccent.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                int right = pnlAccent.Width;
+
+                using (var b1 = new SolidBrush(ColorTranslator.FromHtml("#64B5F6")))
+                    g.FillRectangle(b1, right - 40, 7, 38, 3);
+                using (var b2 = new SolidBrush(Color.FromArgb(120, 100, 181, 246)))
+                    g.FillRectangle(b2, right - 58, 7, 14, 3);
+
+                using (var sf = new Font("Cairo", 10F, FontStyle.Regular))
+                using (var brush = new SolidBrush(Color.FromArgb(210, 255, 255, 255)))
+                    g.DrawString("عرض وإدارة جميع المنتجات", sf, brush, right - 222, 1);
+            };
+
+            pnlTitle.Controls.Add(pnlAccent);
+            pnlTitle.Controls.Add(lblMain);
+
+            var pnlBtn = new Panel
+            {
+                Dock = DockStyle.Left,
+                Width = 180,
+                BackColor = Color.Transparent,
+                Padding = new Padding(20, 0, 0, 0)
+            };
+
+            btnAdd = new Guna2Button
+            {
+                Text = "+ إضافة منتج",
+                FillColor = Color.FromArgb(30, 255, 255, 255),
+                ForeColor = Color.White,
+                BorderRadius = 12,
+                BorderThickness = 1,
+                BorderColor = Color.FromArgb(60, 255, 255, 255),
+                Font = new Font("Cairo", 11F, FontStyle.Bold),
+                Size = new Size(148, 44),
+                Dock = DockStyle.None,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                Location = new Point(20, (76 - 44) / 2)
+            };
+            btnAdd.ShadowDecoration.Enabled = true;
+            btnAdd.ShadowDecoration.Color = Color.FromArgb(40, 0, 0, 0);
+            btnAdd.ShadowDecoration.Depth = 8;
+            btnAdd.HoverState.FillColor = Color.FromArgb(55, 255, 255, 255);
+            btnAdd.Click += (s, e) => ShowAddProductPopup();
+
+            pnlBtn.Controls.Add(btnAdd);
+
+            banner.Controls.Add(pnlBtn);
+            banner.Controls.Add(pnlTitle);
+            pnl.Controls.Add(banner);
+            return pnl;
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  TABLE CARD
+        // ══════════════════════════════════════════════════════
+        private Control BuildTableCard()
+        {
+            var card = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                Padding = new Padding(10, 12, 10, 0)
+            };
+
+            var container = new Guna2Panel
+            {
+                Dock = DockStyle.Fill,
+                FillColor = Color.White,
+                BorderRadius = 16,
+                BorderThickness = 1,
+                BorderColor = ColorTranslator.FromHtml("#E5E7EB")
+            };
+            container.ShadowDecoration.Enabled = true;
+            container.ShadowDecoration.Depth = 10;
+            container.ShadowDecoration.Color = Color.FromArgb(18, 0, 0, 0);
+
+            var header = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 70,
+                BackColor = Color.White,
+                Padding = new Padding(0)
+            };
+
+            lblCountBadge = new Label
+            {
+                Text = "0 منتج",
+                BackColor = Color.Transparent,
+                ForeColor = Color.Transparent,
+                AutoSize = false,
+                Size = new Size(1, 1),
+                Location = new Point(-100, -100)
+            };
+            header.Controls.Add(lblCountBadge);
+
+            header.Paint += (s, e) =>
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+                int W = header.Width;
+                int H = header.Height;
+
+                using (var titleFont = new Font("Cairo", 15F, FontStyle.Bold))
+                using (var titleBrush = new SolidBrush(ColorTranslator.FromHtml("#1A1D23")))
+                {
+                    string title = "قائمة المنتجات";
+                    var tsz = g.MeasureString(title, titleFont);
+                    float tx = (W - tsz.Width) / 2f;
+                    float ty = (H - tsz.Height) / 2f;
+                    g.DrawString(title, titleFont, titleBrush, tx, ty);
+                }
+
+                string badgeText = lblCountBadge.Text;
+                using (var badgeFont = new Font("Cairo", 11F, FontStyle.Bold))
+                {
+                    var bsz = g.MeasureString(badgeText, badgeFont);
+                    int bw = (int)bsz.Width + 22;
+                    int bh = 32;
+                    int bx = W - bw - 20;
+                    int by = (H - bh) / 2;
+
+                    var brc = new Rectangle(bx, by, bw, bh);
+                    using (var path = RoundPath(brc, bh / 2))
+                    using (var br = new LinearGradientBrush(brc,
+                        ColorTranslator.FromHtml("#4E73DF"),
+                        ColorTranslator.FromHtml("#3B5DC9"),
+                        LinearGradientMode.Vertical))
+                        g.FillPath(br, path);
+
+                    using (var wb = new SolidBrush(Color.White))
+                    {
+                        var sf = new StringFormat
+                        {
+                            Alignment = StringAlignment.Center,
+                            LineAlignment = StringAlignment.Center
+                        };
+                        g.DrawString(badgeText, badgeFont, wb,
+                            new RectangleF(bx, by, bw, bh), sf);
+                    }
+                }
+            };
+
+            lblCountBadge.TextChanged += (s, e) => header.Invalidate();
+
+            txtSearch = new Guna2TextBox
+            {
+                Width = 240,
+                Height = 42,
+                BorderRadius = 12,
+                PlaceholderText = "ابحث عن منتج...",
+                FillColor = ColorTranslator.FromHtml("#F9FAFB"),
+                BorderColor = ColorTranslator.FromHtml("#E2E8F0"),
+                Font = new Font("Cairo", 11F),
+                TextAlign = HorizontalAlignment.Right,
+                ForeColor = ColorTranslator.FromHtml("#111827"),
+                PlaceholderForeColor = ColorTranslator.FromHtml("#9CA3AF"),
+                Dock = DockStyle.None,
+                Location = new Point(16, (70 - 42) / 2)
+            };
+            txtSearch.FocusedState.BorderColor = ColorTranslator.FromHtml("#4E73DF");
+            txtSearch.FocusedState.FillColor = Color.White;
+            txtSearch.TextChanged += (s, e) =>
+            {
+                _searchTimer?.Dispose();
+                _searchTimer = new System.Threading.Timer(
+                    _ => Invoke(new Action(LoadProducts)), null, 280, System.Threading.Timeout.Infinite);
+            };
+            header.Controls.Add(txtSearch);
+
+            // Add search icon inside txtSearch
+            var searchIcon = new Label
+            {
+                Text = "🔍",
+                AutoSize = false,
+                Width = 32,
+                ForeColor = Color.FromArgb(156, 163, 175),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Dock = DockStyle.Left
+            };
+            txtSearch.Controls.Add(searchIcon);
+            txtSearch.Padding = new Padding(10, 0, 0, 0); // Add padding to the left
+
+            var sep = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 1,
+                BackColor = ColorTranslator.FromHtml("#E5E7EB")
+            };
+
+            dgvProducts = new Guna2DataGridView
+            {
+                Dock = DockStyle.Fill,
+                RightToLeft = RightToLeft.Yes,
+                AutoGenerateColumns = false,
+                ColumnHeadersHeight = 46,
+                EnableHeadersVisualStyles = false,
+                BackgroundColor = Color.White,
+                BorderStyle = BorderStyle.None,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                RowHeadersVisible = false,
+                AllowUserToAddRows = false,
+                ReadOnly = true,
+                CellBorderStyle = DataGridViewCellBorderStyle.None,
+                ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None,
+                AllowUserToResizeRows = false
+            };
+
+            dgvProducts.RowTemplate.Height = 62;
+            dgvProducts.AdvancedCellBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
+            dgvProducts.GridColor = ColorTranslator.FromHtml("#EDF0F4");
+
+            dgvProducts.ColumnHeadersDefaultCellStyle.BackColor = ColorTranslator.FromHtml("#F8FAFC");
+            dgvProducts.ColumnHeadersDefaultCellStyle.ForeColor = ColorTranslator.FromHtml("#6B7280");
+            dgvProducts.ColumnHeadersDefaultCellStyle.Font = new Font("Cairo", 10.5F, FontStyle.Bold);
+            dgvProducts.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            dgvProducts.ColumnHeadersDefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#F8FAFC");
+            dgvProducts.ColumnHeadersDefaultCellStyle.SelectionForeColor = ColorTranslator.FromHtml("#6B7280");
+
+            dgvProducts.DefaultCellStyle.BackColor = Color.White;
+            dgvProducts.DefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#EEF2FF");
+            dgvProducts.DefaultCellStyle.SelectionForeColor = ColorTranslator.FromHtml("#1A1D23");
+            dgvProducts.DefaultCellStyle.Font = new Font("Cairo", 11F);
+            dgvProducts.DefaultCellStyle.ForeColor = ColorTranslator.FromHtml("#374151");
+            dgvProducts.AlternatingRowsDefaultCellStyle.BackColor = ColorTranslator.FromHtml("#FAFBFF");
+            dgvProducts.ScrollBars = ScrollBars.Vertical;
+
+            try
+            {
+                typeof(DataGridView)
+                    .GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?.SetValue(dgvProducts, true);
+            }
+            catch { }
+
+            BuildGridColumns();
+
+            dgvProducts.CellPainting += DgvProducts_CellPainting;
+            dgvProducts.CellFormatting += DgvProducts_CellFormatting;
+            dgvProducts.SelectionChanged += DgvProducts_SelectionChanged;
+            dgvProducts.CellClick += DgvProducts_CellClick;
+            dgvProducts.Resize += (s, e) => FitColumns();
+
+            container.Controls.Add(dgvProducts);
+            container.Controls.Add(sep);
+            container.Controls.Add(header);
+
+            card.Controls.Add(container);
+            return card;
+        }
+
+        private void BuildGridColumns()
+        {
+            dgvProducts.Columns.Clear();
+
+            void AddCol(string name, string hdr, string prop, int w)
+            {
+                dgvProducts.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    Name = name,
+                    HeaderText = hdr,
+                    DataPropertyName = prop,
+                    Width = w
+                });
+            }
+
+            AddCol("Product", "المنتج", "Name", 240);
+            AddCol("PurchasePrice", "سعر الشراء", "PurchasePrice", 150);
+            AddCol("SalePrice", "سعر البيع", "SalePrice", 150);
+            AddCol("Status", "الحالة", "", 100);
+            AddCol("Actions", "الإجراءات", "", 120);
+
+            foreach (DataGridViewColumn c in dgvProducts.Columns)
+                c.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+
+            dgvProducts.Columns["Product"].DefaultCellStyle.Alignment =
+                DataGridViewContentAlignment.MiddleLeft;
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  DATA
+        // ══════════════════════════════════════════════════════
+        private void LoadProducts()
+        {
+            try
+            {
+                var list = (_service.GetAll() ?? Enumerable.Empty<ProductDto>()).ToList();
+
+                var q = txtSearch?.Text?.Trim() ?? "";
+                if (!string.IsNullOrEmpty(q))
+                    list = list.Where(x => x.Name != null &&
+                        x.Name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+
+                dgvProducts.DataSource = new BindingSource { DataSource = list };
+                FitColumns();
+
+                if (lblCountBadge != null)
+                    lblCountBadge.Text = $"{list.Count} منتج";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"فشل تحميل المنتجات: {ex.Message}", "خطأ",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void FitColumns()
+        {
+            if (dgvProducts == null || dgvProducts.Columns.Count == 0) return;
+            int w = dgvProducts.ClientSize.Width;
+            if (w <= 0) return;
+
+            int wProd = (int)(w * 0.28);
+            int wPurch = (int)(w * 0.22);
+            int wSale = (int)(w * 0.22);
+            int wStat = (int)(w * 0.14);
+            int wAct = w - wProd - wPurch - wSale - wStat;
+
+            dgvProducts.Columns["Product"].Width = Math.Max(100, wProd);
+            dgvProducts.Columns["PurchasePrice"].Width = Math.Max(110, wPurch);
+            dgvProducts.Columns["SalePrice"].Width = Math.Max(110, wSale);
+            dgvProducts.Columns["Status"].Width = Math.Max(90, wStat);
+            dgvProducts.Columns["Actions"].Width = Math.Max(110, wAct);
+        }
+
+        private void ClearForm()
+        {
+            txtName.Text = "";
+            txtPurchasePrice.Text = "";
+            txtSalePrice.Text = "";
+            _selectedProductId = 0;
+            dgvProducts?.ClearSelection();
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  GRID EVENTS
+        // ══════════════════════════════════════════════════════
+        private void DgvProducts_SelectionChanged(object sender, EventArgs e)
+        {
+            if (dgvProducts?.CurrentRow?.DataBoundItem is ProductDto dto)
+            {
+                _selectedProductId = dto.Id;
+                txtName.Text = dto.Name;
+                txtPurchasePrice.Text = dto.PurchasePrice.ToString("N2", Inv);
+                txtSalePrice.Text = dto.SalePrice.ToString("N2", Inv);
+            }
+            else ClearForm();
+        }
+
+        private void DgvProducts_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            if (dgvProducts.Columns[e.ColumnIndex].Name != "Actions") return;
+
+            var dto = dgvProducts.Rows[e.RowIndex].DataBoundItem as ProductDto;
+            if (dto == null) return;
+
+            var cell = dgvProducts.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, false);
+            var mouse = dgvProducts.PointToClient(Cursor.Position);
+
+            int btnH = 30;
+            int btnY = cell.Top + (cell.Height - btnH) / 2;
+            int editW = 70, delW = 30, gap = 8;
+            int totalW = editW + gap + delW;
+            int startX = cell.Left + (cell.Width - totalW) / 2;
+
+            var editHit = new Rectangle(startX, btnY, editW, btnH);
+            var delHit = new Rectangle(startX + editW + gap, btnY, delW, btnH);
+
+            if (editHit.Contains(mouse))
+            {
+                ShowAddProductPopup(dto);
+            }
+            else if (delHit.Contains(mouse))
+            {
+                if (MessageBox.Show("هل تريد حذف هذا المنتج؟", "تأكيد",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                    try
+                    {
+                        _service.Delete(dto.Id);
+                        LoadProducts();
+                        MessageBox.Show("تم الحذف.", "تم", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("خطأ: " + ex.Message, "خطأ",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+            }
+        }
+
+        private void DgvProducts_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (e.RowIndex < 0) return;
+            var col = dgvProducts.Columns[e.ColumnIndex].Name;
+            var dto = dgvProducts.Rows[e.RowIndex].DataBoundItem as ProductDto;
+            if (dto == null) return;
+
+            if (col == "PurchasePrice")
+            {
+                decimal v = 0; try { v = Convert.ToDecimal(e.Value); } catch { v = dto.PurchasePrice; }
+                e.Value = v.ToString("N2", Inv) + " جنيه";
+                e.CellStyle.ForeColor = ColorTranslator.FromHtml("#059669");
+                e.CellStyle.Font = new Font("Cairo", 11F, FontStyle.Bold);
+                e.FormattingApplied = true;
+            }
+            else if (col == "SalePrice")
+            {
+                decimal v = 0; try { v = Convert.ToDecimal(e.Value); } catch { v = dto.SalePrice; }
+                e.Value = v.ToString("N2", Inv) + " جنيه";
+                e.CellStyle.ForeColor = ColorTranslator.FromHtml("#4E73DF");
+                e.CellStyle.Font = new Font("Cairo", 11F, FontStyle.Bold);
+                e.FormattingApplied = true;
+            }
+        }
+
+        private void DgvProducts_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
+        {
+            try
+            {
+                if (e.RowIndex == -1)
+                {
+                    e.Handled = true;
+                    var g = e.Graphics;
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+
+                    using (var fill = new SolidBrush(ColorTranslator.FromHtml("#F8FAFC")))
+                        g.FillRectangle(fill, e.CellBounds);
+
+                    using (var pen = new Pen(ColorTranslator.FromHtml("#E8ECF0"), 1f))
+                        g.DrawLine(pen,
+                            e.CellBounds.Left, e.CellBounds.Bottom - 1,
+                            e.CellBounds.Right, e.CellBounds.Bottom - 1);
+
+                    string headerText = e.Value?.ToString() ?? "";
+                    using (var font = new Font("Cairo", 10.5F, FontStyle.Bold))
+                    using (var textBrush = new SolidBrush(ColorTranslator.FromHtml("#6B7280")))
+                    {
+                        var sf = new StringFormat
+                        {
+                            Alignment = StringAlignment.Center,
+                            LineAlignment = StringAlignment.Center
+                        };
+                        g.DrawString(headerText, font, textBrush, e.CellBounds, sf);
+                    }
+                    return;
+                }
+
+                if (e.RowIndex < 0) return;
+
+                bool sel = dgvProducts.Rows[e.RowIndex].Selected;
+                Color bg = sel
+                    ? ColorTranslator.FromHtml("#EEF2FF")
+                    : (e.RowIndex % 2 == 0 ? Color.White : ColorTranslator.FromHtml("#FAFBFF"));
+
+                var col = dgvProducts.Columns[e.ColumnIndex].Name;
+
+                if (col == "Product") PaintProductCell(e, bg);
+                else if (col == "Status") PaintStatusCell(e, bg);
+                else if (col == "Actions") PaintActionsCell(e, bg);
+
+                // Row divider
+                using (var divPen = new Pen(ColorTranslator.FromHtml("#F0F2F5"), 1f))
+                    e.Graphics.DrawLine(divPen,
+                        e.CellBounds.Left, e.CellBounds.Bottom - 1,
+                        e.CellBounds.Right, e.CellBounds.Bottom - 1);
+            }
+            catch { }
+        }
+
+        // ── Cell painters ──────────────────────────────────────
+        private void PaintProductCell(DataGridViewCellPaintingEventArgs e, Color bg)
+        {
+            e.Handled = true;
+            var g = e.Graphics;
+            g.SetClip(e.CellBounds);
+            g.FillRectangle(new SolidBrush(bg), e.CellBounds);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            var dto = dgvProducts.Rows[e.RowIndex].DataBoundItem as ProductDto;
+            string name = dto?.Name ?? "";
+            if (string.IsNullOrEmpty(name)) { g.ResetClip(); return; }
+
+            // Avatar circle
+            var avColors = new[] { "#4E73DF", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444" };
+            var avColor = ColorTranslator.FromHtml(avColors[e.RowIndex % avColors.Length]);
+            int avSize = 34;
+            int avX = e.CellBounds.Left + 12;
+            int avY = e.CellBounds.Top + (e.CellBounds.Height - avSize) / 2;
+
+            g.FillEllipse(new SolidBrush(avColor), avX, avY, avSize, avSize);
+
+            string letter = name.Length > 0 ? name[0].ToString() : "?";
+            using (var lf = new Font("Cairo", 13F, FontStyle.Bold))
+            {
+                var ls = g.MeasureString(letter, lf);
+                g.DrawString(letter, lf, Brushes.White,
+                    avX + (avSize - ls.Width) / 2f,
+                    avY + (avSize - ls.Height) / 2f);
+            }
+
+            // Name text
+            using (var nf = new Font("Cairo", 11F, FontStyle.Bold))
+            using (var nb = new SolidBrush(ColorTranslator.FromHtml("#111827")))
+            {
+                float tx = avX + avSize + 10;
+                float ty = e.CellBounds.Top + (e.CellBounds.Height - g.MeasureString(name, nf).Height) / 2f;
+                g.DrawString(name, nf, nb, tx, ty);
+            }
+
+            g.ResetClip();
+        }
+
+        private void PaintStatusCell(DataGridViewCellPaintingEventArgs e, Color bg)
+        {
+            e.Handled = true;
+            var g = e.Graphics;
+            g.SetClip(e.CellBounds);
+            g.FillRectangle(new SolidBrush(bg), e.CellBounds);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            int pw = 60, ph = 26;
+            var pr = new Rectangle(
+                e.CellBounds.Left + (e.CellBounds.Width - pw) / 2,
+                e.CellBounds.Top + (e.CellBounds.Height - ph) / 2,
+                pw, ph);
+
+            using (var path = RoundPath(pr, ph / 2))
+            {
+                g.FillPath(new SolidBrush(ColorTranslator.FromHtml("#ECFDF5")), path);
+                g.DrawPath(new Pen(ColorTranslator.FromHtml("#A7F3D0"), 1f), path);
+            }
+
+            // Green dot
+            int ds = 6;
+            int dx = pr.Left + 10;
+            int dy = pr.Top + (pr.Height - ds) / 2;
+            g.FillEllipse(new SolidBrush(ColorTranslator.FromHtml("#10B981")), dx, dy, ds, ds);
+
+            using (var f = new Font("Cairo", 10F, FontStyle.Bold))
+            using (var tb = new SolidBrush(ColorTranslator.FromHtml("#059669")))
+            {
+                var sz = g.MeasureString("نشط", f);
+                g.DrawString("نشط", f, tb,
+                    pr.Left + (pr.Width - sz.Width) / 2f + 3,
+                    pr.Top + (pr.Height - sz.Height) / 2f);
+            }
+
+            g.ResetClip();
+        }
+
+        private void PaintActionsCell(DataGridViewCellPaintingEventArgs e, Color bg)
+        {
+            e.Handled = true;
+            var g = e.Graphics;
+            g.SetClip(e.CellBounds);
+            g.FillRectangle(new SolidBrush(bg), e.CellBounds);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            int btnH = 30;
+            int btnY = e.CellBounds.Top + (e.CellBounds.Height - btnH) / 2;
+            int editW = 70, delW = 30, gap = 8;
+            int totalW = editW + gap + delW;
+            int startX = e.CellBounds.Left + (e.CellBounds.Width - totalW) / 2;
+
+            // Edit button
+            var editRect = new Rectangle(startX, btnY, editW, btnH);
+            using (var path = RoundPath(editRect, 8))
+            {
+                g.FillPath(new SolidBrush(ColorTranslator.FromHtml("#EFF6FF")), path);
+                g.DrawPath(new Pen(ColorTranslator.FromHtml("#BFDBFE"), 1f), path);
+            }
+            using (var f = new Font("Cairo", 9.5F, FontStyle.Bold))
+            using (var tb = new SolidBrush(ColorTranslator.FromHtml("#2563EB")))
+            {
+                var sz = g.MeasureString("✏ تعديل", f);
+                g.DrawString("✏ تعديل", f, tb,
+                    editRect.Left + (editRect.Width - sz.Width) / 2f,
+                    editRect.Top + (editRect.Height - sz.Height) / 2f);
+            }
+
+            // Delete button
+            var delRect = new Rectangle(startX + editW + gap, btnY, delW, btnH);
+            using (var path2 = RoundPath(delRect, 8))
+            {
+                g.FillPath(new SolidBrush(ColorTranslator.FromHtml("#FEF2F2")), path2);
+                g.DrawPath(new Pen(ColorTranslator.FromHtml("#FECACA"), 1f), path2);
+            }
+            using (var pen = new Pen(ColorTranslator.FromHtml("#EF4444"), 1.6f))
+            {
+                int cx = delRect.Left + delRect.Width / 2;
+                int cy = delRect.Top + delRect.Height / 2;
+                g.DrawLine(pen, cx - 5, cy - 4, cx + 5, cy - 4);
+                g.DrawLine(pen, cx - 2, cy - 6, cx + 2, cy - 6);
+                g.DrawRectangle(pen, cx - 4, cy - 3, 8, 7);
+                g.DrawLine(pen, cx - 1, cy - 1, cx - 1, cy + 3);
+                g.DrawLine(pen, cx + 1, cy - 1, cx + 1, cy + 3);
+            }
+
+            g.ResetClip();
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  POPUP — Add / Edit Product
+        // ══════════════════════════════════════════════════════
+        private async void ShowAddProductPopup(ProductDto editDto = null)
+        {
+            bool isEdit = editDto != null;
+
+            // ── Dark overlay ──────────────────────────────
+            var overlay = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
+            Controls.Add(overlay);
+            overlay.BringToFront();
+
+            // overlay left fully transparent so underlying page shows through
+
+            // ── Popup card ────────────────────────────────
+            var popup = new Guna2Panel
+            {
+                Size = new Size(460, 380),
+                BorderRadius = 20,
+                FillColor = Color.White,
+                BackColor = Color.White
+            };
+            popup.ShadowDecoration.Enabled = true;
+            popup.ShadowDecoration.Depth = 50;
+            popup.ShadowDecoration.Color = Color.FromArgb(80, 0, 0, 0);
+
+            void CenterPopup() =>
+                popup.Location = new Point(
+                    (overlay.ClientSize.Width - popup.Width) / 2,
+                    (overlay.ClientSize.Height - popup.Height) / 2);
+
+            overlay.Controls.Add(popup);
+            CenterPopup();
+            overlay.Resize += (s, e) => CenterPopup();
+
+            // Close on outside click
+            overlay.MouseClick += (s, e) =>
+            {
+                if (!popup.Bounds.Contains(e.Location))
+                { Controls.Remove(overlay); overlay.Dispose(); }
+            };
+
+            // ── HEADER (gradient painted) ─────────────────
+            var pnlHead = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 92,
+                BackColor = Color.Transparent
+            };
+
+            pnlHead.Paint += (s, pe) =>
+            {
+                var g = pe.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+
+                var rc = new Rectangle(0, 0, pnlHead.Width, pnlHead.Height);
+
+                // Gradient fill
+                using (var br = new LinearGradientBrush(rc,
+                    ColorTranslator.FromHtml("#1a2f5e"),
+                    ColorTranslator.FromHtml("#1565c0"),
+                    LinearGradientMode.Horizontal))
+                    g.FillRectangle(br, rc);
+
+                // Dot pattern
+                using (var db = new SolidBrush(Color.FromArgb(20, 255, 255, 255)))
+                    for (int x = 8; x < pnlHead.Width; x += 20)
+                        for (int y = 6; y < pnlHead.Height; y += 20)
+                            g.FillEllipse(db, x, y, 2, 2);
+
+                // Decorative circle top-left
+                using (var cb = new SolidBrush(Color.FromArgb(12, 255, 255, 255)))
+                    g.FillEllipse(cb, -40, -40, 180, 180);
+
+                // Icon box (right, RTL)
+                int iconX = pnlHead.Width - 56;
+                int iconY = 20;
+                var iconRect = new Rectangle(iconX, iconY, 40, 40);
+                using (var ip = RoundPath(iconRect, 10))
+                {
+                    g.FillPath(new SolidBrush(Color.FromArgb(45, 255, 255, 255)), ip);
+                    g.DrawPath(new Pen(Color.FromArgb(60, 255, 255, 255), 1f), ip);
+                }
+                // Package icon drawn manually
+                using (var ipen = new Pen(Color.White, 1.8f))
+                {
+                    int cx = iconX + 20, cy = iconY + 20;
+                    g.DrawRectangle(ipen, cx - 9, cy - 7, 18, 16);
+                    g.DrawLine(ipen, cx - 9, cy - 2, cx + 9, cy - 2);
+                    g.DrawLine(ipen, cx, cy - 7, cx, cy - 2);
+                }
+
+                // Title
+                using (var tf = new Font("Cairo", 17F, FontStyle.Bold))
+                using (var tb2 = new SolidBrush(Color.White))
+                {
+                    // Measure and draw from right side (leave 60px for icon area)
+                    string titleStr = isEdit ? "تعديل بيانات المنتج" : "إضافة منتج جديد";
+                    string subStr = isEdit ? "عدّل البيانات ثم اضغط تحديث" : "أدخل بيانات المنتج الجديد ثم اضغط حفظ";
+
+                    var titleSz = g.MeasureString(titleStr, tf);
+                    var subSz = g.MeasureString(subStr, sf2);
+
+                    // Draw right-aligned leaving 60px gap for icon area
+                    g.DrawString(titleStr, tf, tb2, pnlHead.Width - titleSz.Width - 60, 18);
+                    g.DrawString(subStr, sf2, sb2, pnlHead.Width - subSz.Width - 60, 56);
+                }
+            };
+
+            // Close X button (top-left corner, RTL = left)
+            var btnClose = new Guna2Button
+            {
+                Size = new Size(28, 28),
+                Location = new Point(10, 10),
+                Text = "✕",
+                FillColor = Color.FromArgb(40, 255, 255, 255),
+                ForeColor = Color.White,
+                BorderRadius = 8,
+                BorderThickness = 1,
+                BorderColor = Color.FromArgb(60, 255, 255, 255),
+                Font = new Font("Cairo", 10F, FontStyle.Bold)
+            };
+            btnClose.HoverState.FillColor = Color.FromArgb(70, 255, 255, 255);
+            btnClose.Click += (s, e) => { Controls.Remove(overlay); overlay.Dispose(); };
+            pnlHead.Controls.Add(btnClose);
+
+            // ── BODY ──────────────────────────────────────
+            var body = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.White,
+                Padding = new Padding(24, 18, 24, 4)
+            };
+
+            Guna2TextBox MakeTxt(string placeholder)
+            {
+                var t = new Guna2TextBox
+                {
+                    Height = 44,
+                    Dock = DockStyle.Top,
+                    BorderRadius = 12,
+                    FillColor = ColorTranslator.FromHtml("#F9FAFB"),
+                    BorderColor = ColorTranslator.FromHtml("#E5E7EB"),
+                    Font = new Font("Cairo", 11F),
+                    PlaceholderText = placeholder,
+                    PlaceholderForeColor = ColorTranslator.FromHtml("#C4C9D4"),
+                    ForeColor = ColorTranslator.FromHtml("#111827"),
+                    TextAlign = HorizontalAlignment.Right
+                };
+                t.FocusedState.BorderColor = ColorTranslator.FromHtml("#4E73DF");
+                t.FocusedState.FillColor = Color.White;
+                return t;
+            }
+
+            Label MakeLbl(string text) => new Label
+            {
+                Text = text,
+                Dock = DockStyle.Top,
+                Height = 22,
+                Font = new Font("Cairo", 10F, FontStyle.Bold),
+                ForeColor = ColorTranslator.FromHtml("#374151"),
+                TextAlign = ContentAlignment.BottomRight,
+                BackColor = Color.Transparent
+            };
+
+            Label MakeErr() => new Label
+            {
+                Dock = DockStyle.Top,
+                Height = 0,
+                Font = new Font("Cairo", 9F),
+                ForeColor = ColorTranslator.FromHtml("#EF4444"),
+                TextAlign = ContentAlignment.MiddleRight,
+                BackColor = Color.Transparent,
+                Visible = false
+            };
+
+            // Name field
+            var errName = MakeErr();
+            var popTxtName = MakeTxt("مثال: بيبسي كولا 250 مل");
+            var lblName = MakeLbl("اسم المنتج *");
+            var spacer = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = Color.Transparent };
+
+            // Prices — TableLayoutPanel 2 columns
+            var tblPrices = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 72,
+                ColumnCount = 2,
+                RowCount = 1,
+                BackColor = Color.Transparent,
+                Padding = new Padding(0)
+            };
+            tblPrices.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            tblPrices.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+
+            // Purchase (column 0 = right in RTL)
+            var colPurch = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(0, 0, 6, 0) };
+            var errPurch = MakeErr();
+            var popTxtPurch = MakeTxt("0.00"); popTxtPurch.Dock = DockStyle.Top;
+            var lblPurch = MakeLbl("سعر الشراء *"); lblPurch.Dock = DockStyle.Top;
+            colPurch.Controls.Add(errPurch);
+            colPurch.Controls.Add(popTxtPurch);
+            colPurch.Controls.Add(lblPurch);
+
+            // Sale (column 1 = left in RTL)
+            var colSale = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(6, 0, 0, 0) };
+            var errSale = MakeErr();
+            var popTxtSale = MakeTxt("0.00"); popTxtSale.Dock = DockStyle.Top;
+            var lblSale = MakeLbl("سعر البيع *"); lblSale.Dock = DockStyle.Top;
+            colSale.Controls.Add(errSale);
+            colSale.Controls.Add(popTxtSale);
+            colSale.Controls.Add(lblSale);
+
+            tblPrices.Controls.Add(colPurch, 0, 0);
+            tblPrices.Controls.Add(colSale, 1, 0);
+
+            var lblPrices = MakeLbl("الأسعار");
+
+            // Add to body — reverse dock order
+            body.Controls.Add(tblPrices);
+            body.Controls.Add(lblPrices);
+            body.Controls.Add(spacer);
+            body.Controls.Add(errName);
+            body.Controls.Add(popTxtName);
+            body.Controls.Add(lblName);
+
+            if (isEdit)
+            {
+                popTxtName.Text = editDto.Name;
+                popTxtPurch.Text = editDto.PurchasePrice.ToString("N2", Inv);
+                popTxtSale.Text = editDto.SalePrice.ToString("N2", Inv);
+            }
+
+            // ── FOOTER ────────────────────────────────────
+            var footer = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 76,
+                BackColor = Color.White,
+                Padding = new Padding(24, 12, 24, 20)
+            };
+
+            var btnSave = new Guna2Button
+            {
+                Dock = DockStyle.Fill,
+                Text = isEdit ? "💾  تحديث المنتج" : "💾  حفظ المنتج",
+                BorderRadius = 13,
+                FillColor = ColorTranslator.FromHtml("#4E73DF"),
+                ForeColor = Color.White,
+                Font = new Font("Cairo", 12F, FontStyle.Bold),
+                Animated = true
+            };
+            btnSave.HoverState.FillColor = ColorTranslator.FromHtml("#3B5DC9");
+            btnSave.ShadowDecoration.Enabled = true;
+            btnSave.ShadowDecoration.Color = Color.FromArgb(45, 78, 115, 223);
+            btnSave.ShadowDecoration.Depth = 10;
+
+            btnSave.Click += async (s, e) =>
+            {
+                // Reset validation state
+                errName.Visible = errPurch.Visible = errSale.Visible = false;
+                errName.Height = errPurch.Height = errSale.Height = 0;
+                popTxtName.BorderColor = ColorTranslator.FromHtml("#E5E7EB");
+                popTxtPurch.BorderColor = ColorTranslator.FromHtml("#E5E7EB");
+                popTxtSale.BorderColor = ColorTranslator.FromHtml("#E5E7EB");
+
+                bool valid = true;
+
+                if (string.IsNullOrWhiteSpace(popTxtName.Text))
+                {
+                    popTxtName.BorderColor = ColorTranslator.FromHtml("#EF4444");
+                    errName.Text = "• اسم المنتج مطلوب";
+                    errName.Visible = true; errName.Height = 18;
+                    valid = false;
+                }
+
+                if (!decimal.TryParse(popTxtPurch.Text, NumberStyles.Number, Inv, out decimal pp) || pp <= 0)
+                {
+                    popTxtPurch.BorderColor = ColorTranslator.FromHtml("#EF4444");
+                    errPurch.Text = "• أدخل قيمة أكبر من صفر";
+                    errPurch.Visible = true; errPurch.Height = 18;
+                    valid = false;
+                }
+
+                if (!decimal.TryParse(popTxtSale.Text, NumberStyles.Number, Inv, out decimal sp) || sp <= 0)
+                {
+                    popTxtSale.BorderColor = ColorTranslator.FromHtml("#EF4444");
+                    errSale.Text = "• أدخل قيمة أكبر من صفر";
+                    errSale.Visible = true; errSale.Height = 18;
+                    valid = false;
+                }
+
+                if (!valid) return;
+
+                btnSave.Enabled = false;
+                btnSave.Text = "جارٍ الحفظ...";
+                await Task.Delay(500);
+
+                try
+                {
+                    var dto = new ProductDto
+                    {
+                        Name = popTxtName.Text.Trim(),
+                        PurchasePrice = pp,
+                        SalePrice = sp
+                    };
+
+                    if (!isEdit) _service.AddProduct(dto);
+                    else { dto.Id = editDto.Id; _service.Update(dto); }
+
+                    LoadProducts();
+                    Controls.Remove(overlay);
+                    overlay.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    btnSave.Enabled = true;
+                    btnSave.Text = isEdit ? "💾  تحديث المنتج" : "💾  حفظ المنتج";
+                    MessageBox.Show("خطأ: " + ex.Message, "خطأ",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
+
+            footer.Controls.Add(btnSave);
+
+            // ── Assemble ──────────────────────────────────
+            popup.Controls.Add(body);
+            popup.Controls.Add(footer);
+            popup.Controls.Add(pnlHead);
+
+            popTxtName.Focus();
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  GRAPHICS HELPERS
+        // ══════════════════════════════════════════════════════
+        private GraphicsPath RoundPath(Rectangle r, int radius)
+        {
+            int d = radius * 2;
+            var path = new GraphicsPath();
+            path.AddArc(r.Left, r.Top, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Top, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.Left, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        private GraphicsPath RoundRect(Rectangle r, int radius) => RoundPath(r, radius);
+    }
+
+    public static class GraphicsExtensions
+    {
+        public static void FillRoundedRectangle(this Graphics g, Brush brush,
+            int x, int y, int width, int height, int radius)
+        {
+            try
+            {
+                int d = radius * 2;
+                using (var path = new GraphicsPath())
+                {
+                    path.AddArc(x, y, d, d, 180, 90);
+                    path.AddArc(x + width - d, y, d, d, 270, 90);
+                    path.AddArc(x + width - d, y + height - d, d, d, 0, 90);
+                    path.AddArc(x, y + height - d, d, d, 90, 90);
+                    path.CloseFigure();
+                    g.FillPath(brush, path);
+                }
+            }
+            catch { g.FillRectangle(brush, x, y, width, height); }
+        }
+    }
+}

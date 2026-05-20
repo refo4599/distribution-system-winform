@@ -1,0 +1,224 @@
+﻿using System;
+using System.Linq;
+using System.Windows.Forms;
+using DistributionSystem.Business.Dtos;
+using DistributionSystem.Business.Services;
+using DistributionSystem.UI.Helpers;
+
+namespace DistributionSystem.UI.Forms
+{
+    public partial class ProductForm : Form
+    {
+        private readonly ProductService _service;
+
+        public ProductForm()
+        {
+            InitializeComponent();
+            _service = new ProductService();
+        }
+
+        private void ProductForm_Load(object sender, EventArgs e)
+        {
+            LoadProducts();
+        }
+
+        private void LoadProducts()
+        {
+            try
+            {
+                var products = _service.GetAll().ToList();
+                dgvProducts.DataSource = products;
+
+                // Apply modern styling to grid (visual only)
+                DataGridViewStyler.ApplyStyle(dgvProducts);
+
+                if (dgvProducts.Columns["Id"] != null) dgvProducts.Columns["Id"].Visible = false;
+                if (dgvProducts.Columns["CreatedAt"] != null) dgvProducts.Columns["CreatedAt"].Visible = false;
+
+                // Update column headers to Arabic
+                if (dgvProducts.Columns["Name"] != null) dgvProducts.Columns["Name"].HeaderText = "الاسم";
+                if (dgvProducts.Columns["PurchasePrice"] != null) dgvProducts.Columns["PurchasePrice"].HeaderText = "سعر الشراء";
+                if (dgvProducts.Columns["SalePrice"] != null) dgvProducts.Columns["SalePrice"].HeaderText = "سعر البيع";
+
+                // Autosize and right-align text columns for Arabic UX
+                foreach (DataGridViewColumn col in dgvProducts.Columns)
+                {
+                    if (col.ValueType == typeof(decimal) || col.ValueType == typeof(int) || col.Name.ToLower().Contains("price") || col.Name.ToLower().Contains("quantity"))
+                    {
+                        col.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+                    }
+                    else
+                    {
+                        col.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+                    }
+                }
+
+                dgvProducts.Refresh();
+            }
+            catch (Exception ex)
+            {
+                // Show Arabic error only
+                MessageBox.Show($"فشل تحميل المنتجات: {ex.Message}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void dgvProducts_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            try
+            {
+                // Visual-only condition: if there's a column named Quantity or similar, color red when low
+                var col = dgvProducts.Columns[e.ColumnIndex];
+                if (col != null && (col.Name.Equals("Quantity", StringComparison.OrdinalIgnoreCase) || col.HeaderText.Contains("الكم")))
+                {
+                    if (e.Value != null && int.TryParse(e.Value.ToString(), out var q))
+                    {
+                        if (q <= 5)
+                        {
+                            e.CellStyle.ForeColor = System.Drawing.Color.Red;
+                            e.CellStyle.BackColor = System.Drawing.ColorTranslator.FromHtml("#FFF7F7");
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void btnAdd_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                var dto = new ProductDto
+                {
+                    Name = txtName.Text.Trim(),
+                    PurchasePrice = decimal.TryParse(txtPurchasePrice.Text, out var pp) ? pp : 0,
+                    SalePrice = decimal.TryParse(txtSalePrice.Text, out var sp) ? sp : 0
+                };
+
+                var initialQty = int.TryParse(txtInitialQuantity.Text, out var iq) ? iq : 0;
+
+                // Use business service to create product + opening balance transaction within one transaction
+                var newProductId = _service.CreateProductWithOpeningBalance(dto, initialQty);
+
+                MessageBox.Show("تمت إضافة المنتج مع الرصيد الافتتاحي.", "نجاح", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ClearInputs();
+                LoadProducts();
+            }
+            catch (DistributionSystem.Business.Services.ValidationException vex)
+            {
+                MessageBox.Show(vex.Message, "تحقق", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (DistributionSystem.Business.Services.DataAccessException dax)
+            {
+                MessageBox.Show(dax.Message, "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"فشل إضافة المنتج: {ex.Message}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnUpdate_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (!(dgvProducts.CurrentRow?.DataBoundItem is ProductDto current))
+                {
+                    MessageBox.Show("اختر منتجًا للتعديل.", "معلومات", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var dto = new ProductDto
+                {
+                    Id = current.Id,
+                    Name = txtName.Text.Trim(),
+                    PurchasePrice = decimal.TryParse(txtPurchasePrice.Text, out var pp) ? pp : 0,
+                    SalePrice = decimal.TryParse(txtSalePrice.Text, out var sp) ? sp : 0
+                };
+
+                var ok = _service.Update(dto);
+                if (ok)
+                {
+                    MessageBox.Show("تم التعديل.", "نجاح", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    ClearInputs();
+                    LoadProducts();
+                }
+                else
+                {
+                    MessageBox.Show("لم يتم تعديل أي منتج.", "معلومات", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (DistributionSystem.Business.Services.ValidationException vex)
+            {
+                MessageBox.Show(vex.Message, "تحقق", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (DistributionSystem.Business.Services.DataAccessException dax)
+            {
+                MessageBox.Show(dax.Message, "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"فشل التعديل: {ex.Message}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnDelete_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (!(dgvProducts.CurrentRow?.DataBoundItem is ProductDto current))
+                {
+                    MessageBox.Show("اختر منتجًا للحذف.", "معلومات", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var confirm = MessageBox.Show("هل أنت متأكد من حذف هذا المنتج؟", "تأكيد", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (confirm != DialogResult.Yes) return;
+
+                var ok = _service.Delete(current.Id);
+                if (ok)
+                {
+                    MessageBox.Show("تم الحذف.", "نجاح", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    ClearInputs();
+                    LoadProducts();
+                }
+                else
+                {
+                    MessageBox.Show("لم يتم حذف أي منتج.", "معلومات", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (DistributionSystem.Business.Services.DataAccessException dax)
+            {
+                MessageBox.Show(dax.Message, "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"فشل الحذف: {ex.Message}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnClear_Click(object sender, EventArgs e)
+        {
+            ClearInputs();
+        }
+
+        private void dgvProducts_SelectionChanged(object sender, EventArgs e)
+        {
+            if (dgvProducts.CurrentRow?.DataBoundItem is ProductDto current)
+            {
+                txtName.Text = current.Name;
+                txtPurchasePrice.Text = current.PurchasePrice.ToString("0.00");
+                txtSalePrice.Text = current.SalePrice.ToString("0.00");
+                txtInitialQuantity.Text = string.Empty; // initial quantity only for new products
+            }
+        }
+
+        private void ClearInputs()
+        {
+            txtName.Clear();
+            txtPurchasePrice.Clear();
+            txtSalePrice.Clear();
+            txtInitialQuantity.Clear();
+            dgvProducts.ClearSelection();
+        }
+    }
+}

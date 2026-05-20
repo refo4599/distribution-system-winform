@@ -1,0 +1,154 @@
+﻿using System;
+using System.Data;
+using System.Data.SqlClient;
+using System.IO;
+using System.Linq;
+using System.Xml.Linq;
+using DistributionSystem.Business.Dtos;
+using DistributionSystem.Data.Data;
+using DistributionSystem.Data.Repositories;
+using DistributionSystem.Data.Entities;
+
+namespace DistributionSystem.Business.Services
+{
+    public class WrongDatabaseException : Exception
+    {
+        public WrongDatabaseException(string message) : base(message) { }
+    }
+
+    public class MissingTablesException : Exception
+    {
+        public MissingTablesException(string message) : base(message) { }
+    }
+
+    public class InboundService : BaseService
+    {
+        private readonly SqlConnectionFactory _factory;
+        private readonly InboundRepository _inboundRepo;
+        private readonly WarehouseTransactionRepository _warehouseRepo;
+
+        public InboundService()
+        {
+            _factory = new SqlConnectionFactory();
+            _inboundRepo = new InboundRepository(_factory);
+            _warehouseRepo = new WarehouseTransactionRepository(_factory);
+        }
+
+        // public logging wrapper so UI can log without changing BaseService protection
+        public void LogException(Exception ex)
+        {
+            LogError(ex);
+        }
+
+        public int SaveInboundOrder(InboundOrderDto dto)
+        {
+            return Execute(() =>
+            {
+                // Basic validation
+                if (dto == null) throw new ArgumentNullException(nameof(dto));
+                if (dto.Items == null || dto.Items.Count == 0) throw new ArgumentException("Inbound order must contain at least one item.");
+
+                // Use a single connection and transaction for all operations
+                using (var conn = _factory.CreateConnection())
+                {
+                    conn.Open();
+
+                    // Verify required tables exist in dbo schema
+                    var requiredTables = new[] { "InboundOrders", "InboundOrderItems", "WarehouseTransactions" };
+                    var existing = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    using (var checkCmd = conn.CreateCommand())
+                    {
+                        checkCmd.CommandText = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME IN ('InboundOrders','InboundOrderItems','WarehouseTransactions')";
+                        checkCmd.CommandType = CommandType.Text;
+                        using (var rdr = checkCmd.ExecuteReader())
+                        {
+                            while (rdr.Read()) existing.Add(rdr.GetString(0));
+                        }
+                    }
+
+                    var missing = requiredTables.Where(t => !existing.Contains(t)).ToArray();
+                    if (missing.Length > 0)
+                    {
+                        var msg = "Database is missing required tables. Please run migration or check DB. Missing: " + string.Join(", ", missing);
+                        LogError(new InvalidOperationException(msg));
+                        throw new MissingTablesException(msg);
+                    }
+
+                    // Validate products exist before starting transaction (fail fast)
+                    var productRepo = new ProductRepository(_factory);
+                    foreach (var item in dto.Items)
+                    {
+                        if (item.ProductId <= 0) throw new ArgumentException("Invalid ProductId in items.");
+
+                        var prod = productRepo.GetById(item.ProductId);
+                        if (prod == null)
+                        {
+                            throw new ArgumentException($"Product with Id {item.ProductId} does not exist.");
+                        }
+
+                        if (item.Quantity <= 0) throw new ArgumentException("Item quantity must be greater than zero.");
+                        if (item.PurchasePrice <= 0) throw new ArgumentException("Item purchase price must be greater than zero.");
+                    }
+
+                    using (var tran = conn.BeginTransaction())
+                    {
+                        try
+                        {
+                            // Insert inbound order and items using repositories (data access layer)
+                            var inboundId = _inboundRepo.InsertInboundOrder(conn, tran, dto.CustomerId, dto.CreatedAt);
+
+                            foreach (var item in dto.Items)
+                            {
+                                // Insert inbound item
+                                _inboundRepo.InsertInboundItem(conn, tran, inboundId, item.ProductId, item.Quantity, item.PurchasePrice);
+
+                                // Create warehouse transaction record (positive quantity)
+                                var wt = new WarehouseTransaction
+                                {
+                                    ProductId = item.ProductId,
+                                    Quantity = item.Quantity,
+                                    TransactionType = "Inbound",
+                                    ReferenceId = inboundId,
+                                    PurchasePrice = item.PurchasePrice,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+
+                                // Use repository method that accepts connection and transaction to avoid nested transactions
+                                _warehouseRepo.AddTransaction(wt, conn, tran);
+                            }
+
+                            tran.Commit();
+
+                            // Log success
+                            try
+                            {
+                                var logPath = Path.Combine(Path.GetTempPath(), "DistributionSystem.log");
+                                File.AppendAllText(logPath, $"{DateTime.UtcNow:u} - Inbound saved. Id={inboundId}, Items={dto.Items.Count}\n");
+                            }
+                            catch { }
+
+                            return inboundId;
+                        }
+                        catch (SqlException sqlEx)
+                        {
+                            try { tran.Rollback(); } catch { }
+                            LogError(sqlEx);
+                            throw new InvalidOperationException("Failed to save inbound order. Please try again.", sqlEx);
+                        }
+                        catch (MissingTablesException)
+                        {
+                            try { tran.Rollback(); } catch { }
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            try { tran.Rollback(); } catch { }
+                            LogError(ex);
+                            throw;
+                        }
+                    }
+                }
+            });
+        }
+    }
+}

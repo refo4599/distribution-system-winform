@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "sJm3UMCVbws=",
+  "success": true,
+  "projectFilePath": "E:\\My Project\\DistributionSystem.UI\\DistributionSystem.Business\\DistributionSystem.Business.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Shoman\\.nuget\\packages\\bouncycastle\\1.8.9\\bouncycastle.1.8.9.nupkg.sha512",
+    "C:\\Users\\Shoman\\.nuget\\packages\\itextsharp\\5.5.13.3\\itextsharp.5.5.13.3.nupkg.sha512"
+  ],
+  "logs": []
+}

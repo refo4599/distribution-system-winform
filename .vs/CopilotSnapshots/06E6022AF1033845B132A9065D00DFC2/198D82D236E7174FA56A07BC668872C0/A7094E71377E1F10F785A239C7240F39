@@ -1,0 +1,68 @@
+﻿using System;
+using System.Drawing;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using DistributionSystem.Business.Services;
+
+namespace DistributionSystem.UI.Forms
+{
+    public partial class DashboardForm : Form
+    {
+        private readonly DashboardService _service;
+
+        public DashboardForm()
+        {
+            InitializeComponent();
+            _service = new DashboardService();
+        }
+
+        private async void DashboardForm_Load(object sender, EventArgs e)
+        {
+            await LoadStatsAsync();
+            AnimationHelper.FadeIn(this, 300);
+        }
+
+        private Task LoadStatsAsync()
+        {
+            return Task.Run(() =>
+            {
+                try
+                {
+                    var stats = _service.GetStats();
+                    Invoke(new Action(() =>
+                    {
+                        lblTotalProducts.Text = stats.TotalProducts.ToString();
+                        lblTotalCustomers.Text = stats.TotalCustomers.ToString();
+                        lblTotalSuppliers.Text = stats.TotalSuppliers.ToString();
+                        lblTotalSales.Text = stats.TotalSales.ToString();
+                        lblTotalPurchases.Text = stats.TotalPurchases.ToString();
+                        lblLowStock.Text = stats.LowStockAlerts.ToString();
+                    }));
+                }
+                catch (Exception ex)
+                {
+                    Invoke(new Action(() => MessageBox.Show($"فشل تحميل إحصائيات اللوحة: {ex.Message}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error)));
+                }
+            });
+        }
+
+        private void card_Click(object sender, EventArgs e)
+        {
+            var ctrl = sender as Control;
+            if (ctrl == null) return;
+
+            switch (ctrl.Tag as string)
+            {
+                case "Products":
+                    ((MainLayoutForm)ParentForm).LoadChildForm(new ProductForm());
+                    break;
+                case "Customers":
+                    ((MainLayoutForm)ParentForm).LoadChildForm(new CustomerForm());
+                    break;
+                case "Warehouse":
+                    ((MainLayoutForm)ParentForm).LoadChildForm(new WarehouseReportForm());
+                    break;
+            }
+        }
+    }
+}
